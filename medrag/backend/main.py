@@ -3,7 +3,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from contextlib import asynccontextmanager
+from fastapi.responses import JSONResponse
 
+from services.health_service import check_readiness
 from stores.user_store import create_user_indexes
 from stores.database import close_database, connect_database
 from stores.message_store import create_message_indexes
@@ -49,10 +51,28 @@ app.add_middleware(
 app.include_router(pdf_router)
 app.include_router(conversation_router)
 app.include_router(user_router)
+
 @app.get("/health")
 def health_check() -> dict:
-    return {"提示": "DocRAG 后端服务正在运行"}
+    return {
+        "status": "ok",
+        "service": "docrag",
+    }
 
+@app.get("/ready")
+async def readiness_check():
+    result = await check_readiness()
+
+    status_code = (
+        200
+        if result["status"] == "ready"
+        else 503
+    )
+
+    return JSONResponse(
+        status_code=status_code,
+        content=result,
+    )
 
 app.mount(
     "/",

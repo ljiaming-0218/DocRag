@@ -25,7 +25,12 @@ def get_database():
     return database
 
 
+async def ping_database() -> bool:
+    if client is None:
+        return False
 
+    await client.admin.command({"ping": 1})
+    return True
 
 
 async def close_database():
