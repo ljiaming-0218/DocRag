@@ -9,3 +9,4 @@ runtime/
 .env
 .pytest_cache/
 *.log
+tmp/

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from stores.user_store import create_user_indexes
-from services.db import close_database, connect_database
+from stores.database import close_database, connect_database
 from stores.message_store import create_message_indexes
 from stores.conversation_store import create_conversation_indexes
 from stores.document_store import create_document_indexes

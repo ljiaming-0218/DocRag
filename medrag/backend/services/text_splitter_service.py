@@ -22,7 +22,17 @@ def split_pages(pages: list, chunk_size: int = 500, chunk_overlap: int = 50) -> 
         chunks = split_text(text, chunk_size, chunk_overlap)
         document_id = page["document_id"]
         user_id = page["user_id"]
+        extraction_method = page.get("提取方式", "text")
+        image_count = page.get("图片数量", 0)
         for chunk in chunks:
             chunk_index += 1
-            all_chunks.append({"页码": index, "文本块": chunk, "块索引": chunk_index, "document_id": document_id, "user_id": user_id})   
+            all_chunks.append({
+                "页码": index,
+                "文本块": chunk,
+                "块索引": chunk_index,
+                "document_id": document_id,
+                "user_id": user_id,
+                "提取方式": extraction_method,
+                "图片数量": image_count,
+            })
     return all_chunks

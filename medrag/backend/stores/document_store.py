@@ -1,6 +1,6 @@
 
 
-from services.db import get_database
+from stores.database import get_database
 
 
 async def find_document_by_user_and_hash(user_id, document_hash) -> dict:
@@ -43,3 +43,25 @@ async def create_document_indexes() -> None:
         name="user_id_document_hash_unique_idx",
         unique=True
     )
+
+async def update_document_language(
+    user_id: str,
+    document_id: str,
+    language: str,
+) -> bool:
+    database = get_database()
+    collection = database["documents"]
+
+    result = await collection.update_one(
+        {
+            "_id": document_id,
+            "user_id": user_id,
+        },
+        {
+            "$set": {
+                "language": language,
+            }
+        },
+    )
+
+    return result.matched_count == 1

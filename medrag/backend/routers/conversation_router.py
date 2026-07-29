@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from services.llm_service import LLMServiceError
 from services.message_service import list_messages
 from services.conversation_service import create_conversation,list_conversations
 from services.chat_service import ask_conversation
@@ -31,9 +32,13 @@ async def create_conversation_endpoint(request: CreateConversationRequest,) -> d
     return conversation
 
 @router.get("")
-async def list_conversations_endpoint(user_id: str = Query(...), limit: int = Query(default=50, ge=1, le=100),) -> list[dict]:
+async def list_conversations_endpoint(user_id: str = Query(...), document_id: str | None = Query(default=None), limit: int = Query(default=50, ge=1, le=100),) -> list[dict]:
     try:
-        return await list_conversations(user_id, limit)
+        return await list_conversations(
+            user_id=user_id,
+            document_id=document_id,
+            limit=limit,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -51,6 +56,14 @@ async def list_messages_endpoint(conversation_id: str, user_id: str = Query(...)
 async def ask_conversation_endpoint(conversation_id: str, request: AskConversationRequest,) -> dict:
     try:
         result = await ask_conversation(request.user_id, conversation_id, request.query, request.history_limit, request.n_results, request.user_type)
+    except LLMServiceError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={
+                "error": exc.code,
+                "message": str(exc),
+            },
+        ) from exc
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     

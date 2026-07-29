@@ -83,7 +83,17 @@ def save_chunks(chunks:list[dict]) -> int:
     ids =  [f"{chunk['user_id']}_{chunk['document_id']}_page_{chunk['页码']}_chunk_{chunk['块索引']}" for chunk in chunks]  
     documents = [chunk["文本块"] for chunk in chunks]
     embeddings = [chunk["embedding"] for chunk in chunks]
-    metadatas = [{"page_number": chunk["页码"], "chunk_index": chunk["块索引"], "document_id": chunk["document_id"], "user_id": chunk["user_id"],} for chunk in chunks]
+    metadatas = [
+        {
+            "page_number": chunk["页码"],
+            "chunk_index": chunk["块索引"],
+            "document_id": chunk["document_id"],
+            "user_id": chunk["user_id"],
+            "extraction_method": chunk.get("提取方式", "text"),
+            "image_count": chunk.get("图片数量", 0),
+        }
+        for chunk in chunks
+    ]
     try:
         collection.upsert(
             ids=ids,

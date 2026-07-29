@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from stores.document_store import find_document_by_user_and_hash, find_document_by_user_and_id, insert_document
+from stores.document_store import find_document_by_user_and_hash, find_document_by_user_and_id, insert_document, update_document_language
 
 async def get_or_create_document(user_id, filename, document_hash) -> dict:
     user_id = user_id.strip()
@@ -26,6 +26,7 @@ async def get_or_create_document(user_id, filename, document_hash) -> dict:
             "document_hash": document_hash,
             "created_at": now,
             "updated_at": now,
+            "language": "unknown",
         }
         await insert_document(document)
         return {
@@ -36,6 +37,7 @@ async def get_or_create_document(user_id, filename, document_hash) -> dict:
             "existing_document": existing_document,
             "created_at": document["created_at"],
             "updated_at": document["updated_at"],
+            "language": document.get("language", "unknown"),
         }
 
 
@@ -47,6 +49,7 @@ async def get_or_create_document(user_id, filename, document_hash) -> dict:
         "existing_document": existing_document,
         "created_at": document["created_at"],
         "updated_at": document["updated_at"],
+        "language": document.get("language", "unknown"),
     }
 
 
@@ -63,3 +66,20 @@ async def get_existing_document_for_user(user_id, document_id) -> dict:
     if not document:
         raise ValueError("文档不存在或不属于当前用户")
     return document
+
+async def set_document_language(
+    user_id: str,
+    document_id: str,
+    language: str,
+) -> None:
+    if language not in {"zh", "en", "unknown"}:
+        raise ValueError("非法的文档语言")
+
+    updated = await update_document_language(
+        user_id,
+        document_id,
+        language,
+    )
+
+    if not updated:
+        raise ValueError("文档不存在或不属于当前用户")

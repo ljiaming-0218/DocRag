@@ -169,6 +169,7 @@ function logout() {
   $("conversationList").innerHTML = "";
   $("answerConversationId").value = "";
   $("searchDocumentId").value = "";
+  $("newDocumentConversationButton").classList.add("hidden");
   showAuthView();
 }
 
@@ -187,16 +188,23 @@ async function createConversation(userId, documentId, title) {
   return parseResponse(response);
 }
 
-async function loadConversations() {
+async function loadConversations(documentId = null) {
   const user = requireUser();
   clearStatus("conversationStatus");
 
   try {
-    const url = buildUrl("/conversations", {
+    const params = {
       user_id: user.user_id,
       limit: 50,
-    });
+    };
+
+    if (documentId) {
+      params.document_id = documentId;
+    }
+
+    const url = buildUrl("/conversations", params);
     const response = await fetch(url);
+
     conversations = await parseResponse(response);
     renderConversationList();
   } catch (error) {
@@ -232,6 +240,7 @@ async function selectConversation(conversationId) {
 
   currentConversationId = conversationId;
   currentDocumentId = conversation?.document_id || "";
+  $("newDocumentConversationButton").classList.remove("hidden");
   $("answerConversationId").value = currentConversationId;
   $("searchDocumentId").value = currentDocumentId;
   updateContextText(conversation);
@@ -293,10 +302,10 @@ async function startBlankConversation() {
   clearStatus("indexStatus");
   clearStatus("searchStatus");
   clearStatus("answerStatus");
-
+  $("newDocumentConversationButton").classList.add("hidden");
   $("emptyState").classList.remove("hidden");
   updateContextText(null);
-  renderConversationList();
+  await loadConversations();
 }
 
 
@@ -319,7 +328,7 @@ async function startNewConversation() {
     $("emptyState").classList.remove("hidden");
     updateContextText(conversation);
     setStatus("answerStatus", "已创建新会话，可以开始提问。", "success");
-    await loadConversations();
+    await loadConversations(currentDocumentId);
     $("answerQuery").focus();
   } catch (error) {
     setStatus("answerStatus", error.message, "error");
@@ -406,6 +415,7 @@ async function indexPdf() {
   const chunkOverlap = $("chunkOverlap").value;
   const button = $("indexButton");
 
+
   if (!fileInput.files.length) {
     setStatus("indexStatus", "请先选择一个 PDF 文件。", "error");
     return;
@@ -433,6 +443,8 @@ async function indexPdf() {
 
     currentDocumentId = data.document_id || "";
     $("searchDocumentId").value = currentDocumentId;
+    $("newDocumentConversationButton").classList.remove("hidden");
+
     renderMeta("indexResult", data);
 
     if (data.existing_document) {
@@ -441,7 +453,11 @@ async function indexPdf() {
       $("answerResult").innerHTML = "";
       $("emptyState").classList.remove("hidden");
       setStatus("indexStatus", "检测到该文件已索引。你可以从左侧历史会话继续，或点击新建对话。", "success");
-      await loadConversations();
+      conversations = Array.isArray(data.conversations)
+                    ? data.conversations
+                    : [];
+
+      renderConversationList();
       updateContextText(null);
       return;
     }
@@ -454,7 +470,7 @@ async function indexPdf() {
     $("emptyState").classList.remove("hidden");
     updateContextText(conversation);
     setStatus("indexStatus", `${data.message || "PDF 索引完成。"} 已创建问答会话。`, "success");
-    await loadConversations();
+    await loadConversations(currentDocumentId);
   } catch (error) {
     setStatus("indexStatus", error.message, "error");
   } finally {
@@ -579,7 +595,7 @@ async function answerQuestion() {
     });
     $("answerQuery").value = "";
     setStatus("answerStatus", "回答生成完成。", "success");
-    await loadConversations();
+    await loadConversations(currentDocumentId);
   } catch (error) {
     setStatus("answerStatus", error.message, "error");
   } finally {
@@ -594,6 +610,7 @@ function bindEvents() {
   $("indexButton").addEventListener("click", indexPdf);
   $("searchButton").addEventListener("click", searchChunks);
   $("answerButton").addEventListener("click", answerQuestion);
+  $("newDocumentConversationButton").addEventListener("click",startNewConversation);
   $("conversationList").addEventListener("click", (event) => {
     const item = event.target.closest("[data-conversation-id]");
     if (!item) return;

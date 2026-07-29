@@ -1,0 +1,168 @@
+{
+  "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+  "document_ids": {
+    "rag": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+    "lora": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+    "cot": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61"
+  },
+  "results": [
+    {
+      "question_id": "RAG-05",
+      "document_key": "rag",
+      "question_type": "follow_up",
+      "question": "那另一个变体有什么不同？",
+      "status": "error",
+      "error": "503 Server Error: Service Unavailable for url: http://127.0.0.1:8000/conversations/d96eab60-3ff6-4cd5-9fd4-20099c02ce85/ask",
+      "actual": null
+    },
+    {
+      "question_id": "LORA-05",
+      "document_key": "lora",
+      "question_type": "follow_up",
+      "question": "它在这些任务上和全量微调相比表现如何？",
+      "status": "error",
+      "error": "503 Server Error: Service Unavailable for url: http://127.0.0.1:8000/conversations/4701de28-9d66-4b00-8658-e7267dde4bec/ask",
+      "actual": null
+    },
+    {
+      "question_id": "COT-05",
+      "document_key": "cot",
+      "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+      "conversation_id": "b7e86e22-dac9-4042-93d1-598164e91fe3",
+      "question_type": "follow_up",
+      "question": "为什么小模型可能反而变差？",
+      "expected_history": [
+        {
+          "role": "user",
+          "content": "CoT 在不同模型规模上的效果一致吗？"
+        },
+        {
+          "role": "assistant",
+          "content": "不一致，论文发现思维链带来的收益主要在足够大的模型上出现。"
+        }
+      ],
+      "generated_history": [
+        {
+          "question": "CoT 在不同模型规模上的效果一致吗？",
+          "rewritten_query": "Is the effectiveness of Chain of Thought consistent across different model sizes?",
+          "retrieval_queries": [
+            "Is the effectiveness of Chain of Thought consistent across different model sizes?"
+          ],
+          "answer": "不一致。链式思考（CoT）在小模型（< 10 B 参数）上往往会降低性能，而只有在约 100 B 参数的大模型中才会显著提升效果。",
+          "sources": [
+            {
+              "文本块": ", chain-of-thought prompting does not positively\nimpact performance for small models, and only yields performance gains when used with models of\n∼100B parameters. We qualitatively found that models of smaller scale produced ﬂuent but illogical\nchains of thought, leading to lower performance than standard prompting.\n4",
+              "距离": 0.31358879804611206,
+              "元数据": {
+                "image_count": 0,
+                "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+                "chunk_index": 37,
+                "extraction_method": "text",
+                "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+                "page_number": 4
+              },
+              "rerank_score": 0.8583353757858276
+            },
+            {
+              "文本块": "by extrapolating the performance of small scale\nmodels, as chain of thought actually hurts performance for most models smaller than 10B parameters.\nThe question of why model scale improves chain-of-thought prompting is certainly multi-faceted, and\nwe made a preliminary attempt to shed insight into it via error analysis. This small analysis involved\nmanually reading 45 errors made by PaLM 62B and categorizing them into semantic understanding\n(20 errors), one step missing (18 errors), and other er",
+              "距离": 0.44191980361938477,
+              "元数据": {
+                "extraction_method": "text",
+                "chunk_index": 135,
+                "image_count": 0,
+                "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+                "page_number": 16,
+                "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405"
+              },
+              "rerank_score": 0.8533145189285278
+            },
+            {
+              "文本块": "A\nFrequently Asked Questions\nA.1\nWhy does increasing model scale improve chain-of-thought prompting?\nThe ﬁnding that successful chain-of-thought reasoning predictably emerges only at certain model\nscales is intriguing. Scaling up language models has been shown to confer beneﬁts such as improved\nperformance and sample efﬁciency (Kaplan et al., 2020), but chain-of-thought reasoning is emergent\nin the sense that its success cannot be predicted only by extrapolating the performance of small scale\nmo",
+              "距离": 0.4611968696117401,
+              "元数据": {
+                "chunk_index": 134,
+                "image_count": 0,
+                "extraction_method": "text",
+                "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+                "page_number": 16,
+                "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61"
+              },
+              "rerank_score": 0.6369392275810242
+            }
+          ],
+          "returned_source_pages": [
+            4,
+            16
+          ]
+        }
+      ],
+      "expected_rewritten_query": "为什么 Chain-of-Thought Prompting 在较小语言模型上可能使性能低于标准提示？",
+      "gold_answer": "论文观察到，小模型生成的思维链虽然语言流畅，但推理逻辑可能不成立，因此会把模型引向错误答案，表现甚至低于标准提示；明显收益主要在约 100B 参数规模的模型上出现。",
+      "gold_answer_points": [
+        "正确补全主题是小模型上的 CoT",
+        "小模型可能生成流畅但不合逻辑的推理链",
+        "错误推理链导致性能低于标准提示",
+        "收益主要在约 100B 参数规模出现"
+      ],
+      "gold_source_pages": [
+        4
+      ],
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "Why might chain‑of‑thought prompting degrade performance on smaller language models?",
+        "retrieval_queries": [
+          "Why might chain‑of‑thought prompting degrade performance on smaller language models?"
+        ],
+        "answer": "小模型在链式思考提示下往往会生成流畅但逻辑不连贯的推理链，导致推理错误，因而比标准提示表现更差。",
+        "sources": [
+          {
+            "文本块": ", chain-of-thought prompting does not positively\nimpact performance for small models, and only yields performance gains when used with models of\n∼100B parameters. We qualitatively found that models of smaller scale produced ﬂuent but illogical\nchains of thought, leading to lower performance than standard prompting.\n4",
+            "距离": 0.38506296277046204,
+            "元数据": {
+              "chunk_index": 37,
+              "image_count": 0,
+              "page_number": 4,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "extraction_method": "text",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405"
+            },
+            "rerank_score": 0.9980757236480713
+          },
+          {
+            "文本块": "els achieve upward scaling curves (though performance is lower than in the in-domain\nsetting). Hence, chain-of-thought prompting facilitates length generalization beyond seen chains of\nthought for language models of sufﬁcient scale.\n6\nDiscussion\nWe have explored chain-of-thought prompting as a simple mechanism for eliciting multi-step rea-\nsoning behavior in large language models. We ﬁrst saw that chain-of-thought prompting improves\nperformance by a large margin on arithmetic reasoning, yielding",
+            "距离": 0.5423485040664673,
+            "元数据": {
+              "page_number": 8,
+              "extraction_method": "text",
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 73,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61"
+            },
+            "rerank_score": 0.983022153377533
+          },
+          {
+            "文本块": "A\nFrequently Asked Questions\nA.1\nWhy does increasing model scale improve chain-of-thought prompting?\nThe ﬁnding that successful chain-of-thought reasoning predictably emerges only at certain model\nscales is intriguing. Scaling up language models has been shown to confer beneﬁts such as improved\nperformance and sample efﬁciency (Kaplan et al., 2020), but chain-of-thought reasoning is emergent\nin the sense that its success cannot be predicted only by extrapolating the performance of small scale\nmo",
+            "距离": 0.45462799072265625,
+            "元数据": {
+              "extraction_method": "text",
+              "image_count": 0,
+              "chunk_index": 134,
+              "page_number": 16,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61"
+            },
+            "rerank_score": 0.9789325594902039
+          }
+        ],
+        "returned_source_pages": [
+          4,
+          8,
+          16
+        ],
+        "task_type": "qa"
+      }
+    }
+  ]
+}

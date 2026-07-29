@@ -1,7 +1,7 @@
 from fastapi import HTTPException, UploadFile
 from services.user_service import get_existing_user
-from services.pdf_service import extract_pdf_pages
-from services.pdf_upload import upload_pdf
+from services.pdf_parser_service import extract_pdf_pages
+from services.pdf_storage_service import upload_pdf
 from services.document_service import get_or_create_document
 from pathlib import Path
 
@@ -61,6 +61,7 @@ async def prepare_document(user_id: str, file: UploadFile) -> dict:
         "document_id": document_info["document_id"],
         "user_id": user["user_id"],
         "existing_document": document_info["existing_document"],
+        "document_language": document_info["language"],
     }
 
 

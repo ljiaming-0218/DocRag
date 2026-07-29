@@ -5,6 +5,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     HF_HOME=/home/user/.cache/huggingface
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr \
+        tesseract-ocr-eng \
+        tesseract-ocr-chi-sim \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd -m -u 1000 user
 
 WORKDIR /home/user/app
@@ -18,7 +25,12 @@ USER user
 RUN python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('BAAI/bge-small-zh-v1.5'); CrossEncoder('BAAI/bge-reranker-base')"
 
 ENV HF_HUB_OFFLINE=1 \
-    TRANSFORMERS_OFFLINE=1
+    TRANSFORMERS_OFFLINE=1 \
+    OCR_ENABLED=true \
+    OCR_LANGUAGES=eng+chi_sim \
+    OCR_DPI=300 \
+    OCR_MIN_TEXT_CHARS=20 \
+    TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 COPY --chown=user:user medrag ./medrag
 

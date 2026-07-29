@@ -1,4 +1,4 @@
-from services.db import get_database
+from stores.database import get_database
 
 
 async def insert_message(message: dict) -> None:

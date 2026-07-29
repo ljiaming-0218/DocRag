@@ -1,14 +1,25 @@
+import logging
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from services.conversation_service import list_conversations
+from services.language_service import detect_document_language
+from services.document_service import set_document_language
 from services.user_service import get_existing_user
-from services.validation_service import validate_chunk_params
+from services.chunk_validation_service import validate_chunk_params
 from services.llm_service import generate_answer
 from services.prompt_service import build_rag_prompt
-from services.text_splitter import split_pages
+from services.text_splitter_service import split_pages
 from services.embedding_service import embed_chunks
 from services.vector_store_service import has_chunks, save_chunks
-from services.build_pdf_pages import build_pdf_pages, parse_document_pages, prepare_document
+from services.document_ingestion_service import (
+    build_pdf_pages,
+    parse_document_pages,
+    prepare_document,
+)
 from services.search_service import search_relevant_chunks
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/pdf",
@@ -53,19 +64,69 @@ async def index_pdfs(user_id: str, file: UploadFile = File(...), chunk_size: int
     context = await prepare_document(user_id, file)
 
     reindexed = context["existing_document"]
-    if context["existing_document"] and has_chunks(user["user_id"], context["document_id"]):
+
+    existing_chunks = (
+        context["existing_document"]
+        and has_chunks(
+            user["user_id"],
+            context["document_id"],
+        )
+    )
+    if existing_chunks:
+        document_language = context["document_language"]
+        history = await list_conversations(
+            user_id=user["user_id"],
+            document_id=context["document_id"],
+            limit=50,
+        )
+        if document_language == "unknown":
+            try:
+                pages = parse_document_pages(
+                    context["save_path"],
+                    context,
+                )
+
+                document_language = detect_document_language(pages)
+
+                await set_document_language(
+                    user["user_id"],
+                    context["document_id"],
+                    document_language,
+                )
+            except Exception:
+                logger.exception(
+                    "document_language_backfill_failed "
+                    "user_id=%s document_id=%s",
+                    user["user_id"],
+                    context["document_id"],
+                )
+                document_language = "unknown"
+
         return {
             "message": f"文件 '{context['文件名']}' 已存在，跳过索引。",
             "文件名": context["文件名"],
             "document_id": context["document_id"],
             "user_id": user["user_id"],
             "document_hash": context["document_hash"],
-            "existing_document": context["existing_document"],
+            "existing_document": True,
             "reindexed": False,
+            "document_language": document_language,
+            "conversations": history,
         }
 
     pages = parse_document_pages(context["save_path"], context)
+    document_language = detect_document_language(pages)
+
+    await set_document_language(
+        user["user_id"],
+        context["document_id"],
+        document_language,
+    )
     chunks = split_pages(pages, chunk_size, chunk_overlap)
+
+    ocr_page_count = sum(page.get("提取方式") == "ocr" for page in pages)
+    ocr_required_page_count = sum(page.get("提取方式") == "ocr_required" for page in pages)
+    empty_page_count = sum(not page.get("文本", "").strip() for page in pages)
 
 
     embedded_chunks = embed_chunks(chunks)
@@ -87,7 +148,11 @@ async def index_pdfs(user_id: str, file: UploadFile = File(...), chunk_size: int
         "document_hash": context["document_hash"],
         "existing_document": context["existing_document"],
         "reindexed": reindexed,
-        
+        "ocr_page_count": ocr_page_count,
+        "ocr_required_page_count": ocr_required_page_count,
+        "empty_page_count": empty_page_count,
+        "document_language": document_language,
+        "conversations": [],
     }
 
 @router.post("/parse")

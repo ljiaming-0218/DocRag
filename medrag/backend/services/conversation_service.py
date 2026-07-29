@@ -47,7 +47,7 @@ async def create_conversation(user_id: str, document_id: str, title: str = "新�
     }
 
 
-async def list_conversations(user_id: str, limit: int = 50) -> list[dict]:
+async def list_conversations(user_id: str, document_id: str | None = None, limit: int = 50) -> list[dict]:
     user_id = user_id.strip()
     if not user_id:
         raise ValueError("user_id 不能为空")
@@ -56,8 +56,20 @@ async def list_conversations(user_id: str, limit: int = 50) -> list[dict]:
 
     if limit <= 0 or limit > 100:
         raise ValueError("limit 必须在 1 到 100 之间")
-    
-    conversations = await find_conversations(user_id, limit)
+
+    if document_id is not None:
+        document_id = document_id.strip()
+
+        if not document_id:
+            raise ValueError("document_id 不能为空")
+
+        await get_existing_document_for_user(user_id, document_id)
+
+    conversations = await find_conversations(
+        user_id=user_id,
+        document_id=document_id,
+        limit=limit,
+    )
     results = []
 
     for conversation in conversations:

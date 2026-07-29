@@ -1,5 +1,5 @@
 
-def validate_chunk_params(chunk_size: int , chunk_overlap: int) -> None:
+def validate_chunk_params(chunk_size: int, chunk_overlap: int) -> None:
     if chunk_size <= 0:
         raise ValueError("chunk_size 必须大于 0")
     if chunk_overlap < 0:

@@ -1,0 +1,1160 @@
+{
+  "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+  "document_ids": {
+    "rag": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+    "lora": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+    "cot": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61"
+  },
+  "config": {
+    "base_url": "http://127.0.0.1:8000",
+    "chunk_size": 500,
+    "chunk_overlap": 50,
+    "history_limit": 6,
+    "n_results": 3,
+    "user_type": "general"
+  },
+  "results": [
+    {
+      "question_id": "RAG-01",
+      "document_key": "rag",
+      "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+      "conversation_id": "9fd26dda-a52f-48cb-8356-fd55c90205f6",
+      "question_type": "fact",
+      "question": "RAG 模型中的参数化记忆和非参数化记忆分别是什么？",
+      "expected_rewritten_query": "RAG 模型中的参数化记忆和非参数化记忆分别是什么？",
+      "gold_answer": "参数化记忆是预训练的序列到序列生成模型；非参数化记忆是由神经检索器访问的 Wikipedia 稠密向量索引。",
+      "gold_answer_points": [
+        "参数化记忆是预训练 seq2seq 生成模型",
+        "非参数化记忆是 Wikipedia 的稠密向量索引",
+        "非参数化记忆由预训练神经检索器访问"
+      ],
+      "gold_source_pages": [
+        1
+      ],
+      "expected_answerable": true,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "In Retrieval‑Augmented Generation (RAG) models, what are parametric memory and non‑parametric memory?",
+        "retrieval_queries": [
+          "In Retrieval‑Augmented Generation (RAG) models, what are parametric memory and non‑parametric memory?"
+        ],
+        "answer": "**参数化记忆**：预训练的序列到序列（seq2seq）Transformer 模型（如 BART），负责生成文本。  \n**非参数化记忆**：基于密集向量索引的 Wikipedia 文档集合，通过预训练的神经检索器（如 DPR）检索相关文档。",
+        "sources": [
+          {
+            "文本块": "ism to explicit non-parametric\nmemory have so far been only investigated for extractive downstream tasks. We\nexplore a general-purpose ﬁne-tuning recipe for retrieval-augmented generation\n(RAG) — models which combine pre-trained parametric and non-parametric mem-\nory for language generation. We introduce RAG models where the parametric\nmemory is a pre-trained seq2seq model and the non-parametric memory is a dense\nvector index of Wikipedia, accessed with a pre-trained neural retriever. We com-\npa",
+            "距离": 0.3648621737957001,
+            "元数据": {
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "chunk_index": 3,
+              "extraction_method": "text",
+              "page_number": 1,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "image_count": 0
+            },
+            "rerank_score": 0.9997660517692566
+          },
+          {
+            "文本块": "ich we refer to as retrieval-augmented generation (RAG).\nWe build RAG models where the parametric memory is a pre-trained seq2seq transformer, and the\nnon-parametric memory is a dense vector index of Wikipedia, accessed with a pre-trained neural\nretriever. We combine these components in a probabilistic model trained end-to-end (Fig. 1). The\nretriever (Dense Passage Retriever [26], henceforth DPR) provides latent documents conditioned on\nthe input, and the seq2seq model (BART [32]) then condition",
+            "距离": 0.34348762035369873,
+            "元数据": {
+              "image_count": 0,
+              "extraction_method": "text",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "chunk_index": 11,
+              "page_number": 2
+            },
+            "rerank_score": 0.9994670748710632
+          },
+          {
+            "文本块": "s, and\ncould represent promising future work.\n6\nDiscussion\nIn this work, we presented hybrid generation models with access to parametric and non-parametric\nmemory. We showed that our RAG models obtain state of the art results on open-domain QA. We\nfound that people prefer RAG’s generation over purely parametric BART, ﬁnding RAG more factual\nand speciﬁc. We conducted an thorough investigation of the learned retrieval component, validating\nits effectiveness, and we illustrated how the retrieval in",
+            "距离": 0.45479750633239746,
+            "元数据": {
+              "image_count": 0,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "extraction_method": "text",
+              "chunk_index": 84,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "page_number": 9
+            },
+            "rerank_score": 0.9963276982307434
+          }
+        ],
+        "returned_source_pages": [
+          1,
+          2,
+          9
+        ],
+        "task_type": "qa"
+      }
+    },
+    {
+      "question_id": "RAG-02",
+      "document_key": "rag",
+      "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+      "conversation_id": "157e82ec-609c-4f89-82ce-e9b5702c94dc",
+      "question_type": "comparison",
+      "question": "RAG-Sequence 与 RAG-Token 在使用检索文档生成答案时有什么区别？",
+      "expected_rewritten_query": "RAG-Sequence 与 RAG-Token 在使用检索文档生成答案时有什么区别？",
+      "gold_answer": "RAG-Sequence 使用同一个检索文档生成完整序列；RAG-Token 可以在生成每个目标 token 时基于不同的检索文档。",
+      "gold_answer_points": [
+        "RAG-Sequence 对完整生成序列使用同一文档",
+        "RAG-Token 可以为不同目标 token 使用不同文档"
+      ],
+      "gold_source_pages": [
+        3
+      ],
+      "expected_answerable": true,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "What are the differences between RAG‑Sequence and RAG‑Token when generating answers using retrieved documents?",
+        "retrieval_queries": [
+          "What are the differences between RAG‑Sequence and RAG‑Token when generating answers using retrieved documents?"
+        ],
+        "answer": "RAG‑Sequence 在生成答案时会为整段文本选定同一份检索文档，然后用这份文档来预测所有目标 token；  \nRAG‑Token 则在每一步生成 token 时都对 top‑k 检索文档分别计算分布，然后对这些分布做边缘化，允许答案在不同 token 之间“混合”来自多份文档的内容。",
+        "sources": [
+          {
+            "文本块": "r each\ntarget token and marginalize accordingly. This allows the generator to choose content from several\ndocuments when producing an answer. Concretely, the top K documents are retrieved using the\nretriever, and then the generator produces a distribution for the next output token for each document,\nbefore marginalizing, and repeating the process with the following output token, Formally, we deﬁne:\npRAG-Token(y|x) ≈\nN\nY\ni\nX\nz∈top-k(p(·|x))\npη(z|x)pθ(yi|x, z, y1:i−1)\nFinally, we note that RAG can",
+            "距离": 0.4508148431777954,
+            "元数据": {
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 22,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "extraction_method": "text",
+              "page_number": 3
+            },
+            "rerank_score": 0.9847527146339417
+          },
+          {
+            "文本块": "ng the effectiveness of RAG on\nthe task over a state-of-the-art generation model. Evaluators also ﬁnd RAG generations to be more\nspeciﬁc by a large margin. Table 3 shows typical generations from each model.\nJeopardy questions often contain two separate pieces of information, and RAG-Token may perform\nbest because it can generate responses that combine content from several documents. Figure 2 shows\nan example. When generating “Sun”, the posterior is high for document 2 which mentions “The\nSun Als",
+            "距离": 0.4455900192260742,
+            "元数据": {
+              "extraction_method": "text",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "image_count": 0,
+              "page_number": 6,
+              "chunk_index": 54
+            },
+            "rerank_score": 0.978111743927002
+          },
+          {
+            "文本块": "by θ that generates a current token based on a context of the previous i −1 tokens y1:i−1, the original\ninput x and a retrieved passage z.\nTo train the retriever and generator end-to-end, we treat the retrieved document as a latent variable.\nWe propose two models that marginalize over the latent documents in different ways to produce a\ndistribution over generated text. In one approach, RAG-Sequence, the model uses the same document\nto predict each target token. The second approach, RAG-Token, ca",
+            "距离": 0.45795559883117676,
+            "元数据": {
+              "extraction_method": "text",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "image_count": 0,
+              "page_number": 3,
+              "chunk_index": 19,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb"
+            },
+            "rerank_score": 0.9739123582839966
+          }
+        ],
+        "returned_source_pages": [
+          3,
+          6
+        ],
+        "task_type": "qa"
+      }
+    },
+    {
+      "question_id": "RAG-03",
+      "document_key": "rag",
+      "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+      "conversation_id": "553e65bd-937f-42e6-ac4b-ed678517b3c2",
+      "question_type": "summary",
+      "question": "总结作者评估 RAG 的主要任务类型和实验结论。",
+      "expected_rewritten_query": "总结论文中 RAG 的主要评估任务类型和实验结论。",
+      "gold_answer": "论文在开放域问答、MS MARCO 抽象式问答、Jeopardy 问题生成和 FEVER 事实验证等知识密集型任务上评估 RAG。RAG 在三项开放域问答任务上达到当时最佳结果，并且相比仅使用参数化记忆的 BART，生成内容通常更具体、更多样、更符合事实、幻觉更少；替换非参数化索引还可以更新模型使用的外部知识。",
+      "gold_answer_points": [
+        "覆盖开放域问答",
+        "覆盖抽象式问答、问题生成或事实验证",
+        "三项开放域问答达到当时最佳结果",
+        "生成内容更具体、多样或更符合事实",
+        "可通过替换非参数化索引更新知识"
+      ],
+      "gold_source_pages": [
+        5,
+        6,
+        8
+      ],
+      "expected_answerable": true,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "What are the main task types and experimental conclusions that the author evaluated for Retrieval‑Augmented Generation (RAG)?",
+        "retrieval_queries": [
+          "What are the main task types and experimental conclusions that the author evaluated for Retrieval‑Augmented Generation (RAG)?",
+          "Which open‑domain question answering tasks were evaluated for RAG and how did its performance compare to state‑of‑the‑art models?",
+          "What sequence classification tasks (e.g., 3‑way and 2‑way support/refute) were used to evaluate RAG and what were the reported accuracy results?",
+          "What experimental findings were reported regarding RAG's generation of specific, diverse, and factual language compared to a parametric‑only seq2seq baseline?",
+          "What overall experimental conclusion did the authors draw about the benefits of combining parametric and non‑parametric memory for knowledge‑intensive tasks?"
+        ],
+        "answer": "**主要任务类型**  \n1. **开放域问答（Open‑Domain QA）** – 评估在 Natural Questions、WebQuestions、CuratedTrec、TQA 等数据集上的性能。  \n2. **抽象式问答（Abstractive QA / NLG）** – 在 Open MS‑MARCO NLG 任务上生成答案。  \n3. **分类任务** – 以 FEVER 事实验证为例，执行 3‑way（支持/反驳/信息不足）和 2‑way（支持/反驳）分类。  \n4. **Jeopardy 题目生成** – 生成 Jeopardy 风格的问题。  \n\n**主要实验结论**  \n- **开放域问答**：RAG 在所有四个开放域 QA 任务上均创下新纪录（仅在 TQA 的 T5‑可比拆分上与 T5 相当），并显著优于最近的基线。  \n- **抽象式问答**：RAG‑Sequence 在 Open MS‑MARCO NLG 上比 BART 提升 2.6 BLEU 与 2.6 ROUGE‑L，接近最先进模型的表现。  \n- **分类任务**：RAG 可用于序列分类（将类别视为长度为一的目标序列），在 FEVER 任务中，当正确答案不在检索到的文档中时，RAG 仍能取得 11.8 % 的准确率，而提取式模型则为 0 %。  \n- **Jeopardy 题目生成**：RAG‑Token 在 Jeopardy 题目生成任务上表现优于基线。  \n- **生成质量**：RAG 生成的文本更具体、多样且更具事实性，且比纯参数化的 BART 产生更少的幻觉。",
+        "sources": [
+          {
+            "文本块": "ism to explicit non-parametric\nmemory have so far been only investigated for extractive downstream tasks. We\nexplore a general-purpose ﬁne-tuning recipe for retrieval-augmented generation\n(RAG) — models which combine pre-trained parametric and non-parametric mem-\nory for language generation. We introduce RAG models where the parametric\nmemory is a pre-trained seq2seq model and the non-parametric memory is a dense\nvector index of Wikipedia, accessed with a pre-trained neural retriever. We com-\npa",
+            "距离": 0.3577161431312561,
+            "元数据": {
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "page_number": 1,
+              "extraction_method": "text",
+              "chunk_index": 3,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb"
+            },
+            "rerank_score": 0.43339186906814575,
+            "matched_queries": [
+              "What are the main task types and experimental conclusions that the author evaluated for Retrieval‑Augmented Generation (RAG)?",
+              "What experimental findings were reported regarding RAG's generation of specific, diverse, and factual language compared to a parametric‑only seq2seq baseline?",
+              "What overall experimental conclusion did the authors draw about the benefits of combining parametric and non‑parametric memory for knowledge‑intensive tasks?"
+            ]
+          },
+          {
+            "文本块": "sing pre-trained access mechanisms, the ability to access knowledge is\npresent without additional training.\nOur results highlight the beneﬁts of combining parametric and non-parametric memory with genera-\ntion for knowledge-intensive tasks—tasks that humans could not reasonably be expected to perform\nwithout access to an external knowledge source. Our RAG models achieve state-of-the-art results\non open Natural Questions [29], WebQuestions [3] and CuratedTrec [2] and strongly outperform\nrecent ap",
+            "距离": 0.3733336925506592,
+            "元数据": {
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "page_number": 2,
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "chunk_index": 14
+            },
+            "rerank_score": 0.35109850764274597,
+            "matched_queries": [
+              "What are the main task types and experimental conclusions that the author evaluated for Retrieval‑Augmented Generation (RAG)?",
+              "What sequence classification tasks (e.g., 3‑way and 2‑way support/refute) were used to evaluate RAG and what were the reported accuracy results?",
+              "What overall experimental conclusion did the authors draw about the benefits of combining parametric and non‑parametric memory for knowledge‑intensive tasks?"
+            ]
+          },
+          {
+            "文本块": "e\ntwo variants: the standard 3-way classiﬁcation task (supports/refutes/not enough info) and the 2-way\n(supports/refutes) task studied in Thorne and Vlachos [57]. In both cases we report label accuracy.\n4\nResults\n4.1\nOpen-domain Question Answering\nTable 1 shows results for RAG along with state-of-the-art models. On all four open-domain QA\ntasks, RAG sets a new state of the art (only on the T5-comparable split for TQA). RAG combines\nthe generation ﬂexibility of the “closed-book” (parametric only)",
+            "距离": 0.3677418529987335,
+            "元数据": {
+              "page_number": 5,
+              "image_count": 0,
+              "chunk_index": 45,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text"
+            },
+            "rerank_score": 0.1944001317024231,
+            "matched_queries": [
+              "What are the main task types and experimental conclusions that the author evaluated for Retrieval‑Augmented Generation (RAG)?",
+              "Which open‑domain question answering tasks were evaluated for RAG and how did its performance compare to state‑of‑the‑art models?",
+              "What sequence classification tasks (e.g., 3‑way and 2‑way support/refute) were used to evaluate RAG and what were the reported accuracy results?"
+            ]
+          },
+          {
+            "文本块": "ectures. For language generation tasks, we ﬁnd that RAG models generate\nmore speciﬁc, diverse and factual language than a state-of-the-art parametric-only\nseq2seq baseline.\n1\nIntroduction\nPre-trained neural language models have been shown to learn a substantial amount of in-depth knowl-\nedge from data [47]. They can do so without any access to an external memory, as a parameterized\nimplicit knowledge base [51, 52]. While this development is exciting, such models do have down-\nsides: They cannot ",
+            "距离": 0.4102841913700104,
+            "元数据": {
+              "extraction_method": "text",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "chunk_index": 5,
+              "image_count": 0,
+              "page_number": 1
+            },
+            "rerank_score": 0.0904429629445076,
+            "matched_queries": [
+              "What are the main task types and experimental conclusions that the author evaluated for Retrieval‑Augmented Generation (RAG)?",
+              "What experimental findings were reported regarding RAG's generation of specific, diverse, and factual language compared to a parametric‑only seq2seq baseline?"
+            ]
+          },
+          {
+            "文本块": ")pθ(yi|x, z, y1:i−1)\nFinally, we note that RAG can be used for sequence classiﬁcation tasks by considering the target class\nas a target sequence of length one, in which case RAG-Sequence and RAG-Token are equivalent.\n2.2\nRetriever: DPR\nThe retrieval component pη(z|x) is based on DPR [26]. DPR follows a bi-encoder architecture:\npη(z|x) ∝exp\n\u0000d(z)⊤q(x)\n\u0001\nd(z) = BERTd(z), q(x) = BERTq(x)\nwhere d(z) is a dense representation of a document produced by a BERTBASE document encoder [8],\nand q(x) a query",
+            "距离": 0.5263866186141968,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 23,
+              "page_number": 3,
+              "image_count": 0,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "extraction_method": "text"
+            },
+            "rerank_score": 0.06417334824800491,
+            "matched_queries": [
+              "What are the main task types and experimental conclusions that the author evaluated for Retrieval‑Augmented Generation (RAG)?"
+            ]
+          },
+          {
+            "文本块": "r refuted by\nWikipedia, or whether there is not enough information to decide. The task requires retrieving\nevidence from Wikipedia relating to the claim and then reasoning over this evidence to classify\nwhether the claim is true, false, or unveriﬁable from Wikipedia alone. FEVER is a retrieval problem\ncoupled with an challenging entailment reasoning task. It also provides an appropriate testbed for\nexploring the RAG models’ ability to handle classiﬁcation rather than generation. We map FEVER\ncla",
+            "距离": 0.4798917770385742,
+            "元数据": {
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "chunk_index": 43,
+              "page_number": 5,
+              "extraction_method": "text"
+            },
+            "rerank_score": 0.0366099514067173,
+            "matched_queries": [
+              "What sequence classification tasks (e.g., 3‑way and 2‑way support/refute) were used to evaluate RAG and what were the reported accuracy results?"
+            ]
+          },
+          {
+            "文本块": "n when the correct answer is not in any retrieved document, achieving 11.8% accuracy in such\ncases for NQ, where an extractive model would score 0%.\n4.2\nAbstractive Question Answering\nAs shown in Table 2, RAG-Sequence outperforms BART on Open MS-MARCO NLG by 2.6 Bleu\npoints and 2.6 Rouge-L points. RAG approaches state-of-the-art model performance, which is\nimpressive given that (i) those models access gold passages with speciﬁc information required to\ngenerate the reference answer , (ii) many qu",
+            "距离": 0.4981597065925598,
+            "元数据": {
+              "extraction_method": "text",
+              "chunk_index": 51,
+              "page_number": 6,
+              "image_count": 0,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405"
+            },
+            "rerank_score": 0.015390229411423206,
+            "matched_queries": [
+              "Which open‑domain question answering tasks were evaluated for RAG and how did its performance compare to state‑of‑the‑art models?"
+            ]
+          },
+          {
+            "文本块": "s, and\ncould represent promising future work.\n6\nDiscussion\nIn this work, we presented hybrid generation models with access to parametric and non-parametric\nmemory. We showed that our RAG models obtain state of the art results on open-domain QA. We\nfound that people prefer RAG’s generation over purely parametric BART, ﬁnding RAG more factual\nand speciﬁc. We conducted an thorough investigation of the learned retrieval component, validating\nits effectiveness, and we illustrated how the retrieval in",
+            "距离": 0.39867568016052246,
+            "元数据": {
+              "page_number": 9,
+              "chunk_index": 84,
+              "image_count": 0,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "extraction_method": "text",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405"
+            },
+            "rerank_score": 0.014164500869810581,
+            "matched_queries": [
+              "What experimental findings were reported regarding RAG's generation of specific, diverse, and factual language compared to a parametric‑only seq2seq baseline?"
+            ]
+          },
+          {
+            "文本块": "ed to\ngenerate the reference answer , (ii) many questions are unanswerable without the gold passages, and\n(iii) not all questions are answerable from Wikipedia alone. Table 3 shows some generated answers\nfrom our models. Qualitatively, we ﬁnd that RAG models hallucinate less and generate factually\ncorrect text more often than BART. Later, we also show that RAG generations are more diverse than\nBART generations (see §4.5).\n4.3\nJeopardy Question Generation\nTable 2 shows that RAG-Token performs bet",
+            "距离": 0.4080728590488434,
+            "元数据": {
+              "page_number": 6,
+              "extraction_method": "text",
+              "chunk_index": 52,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405"
+            },
+            "rerank_score": 0.013878898695111275,
+            "matched_queries": [
+              "What experimental findings were reported regarding RAG's generation of specific, diverse, and factual language compared to a parametric‑only seq2seq baseline?"
+            ]
+          }
+        ],
+        "returned_source_pages": [
+          1,
+          2,
+          5,
+          3,
+          6,
+          9
+        ],
+        "task_type": "summary"
+      }
+    },
+    {
+      "question_id": "RAG-04",
+      "document_key": "rag",
+      "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+      "conversation_id": "62369a1f-2a7a-4fa8-adf2-59662679776b",
+      "question_type": "unanswerable",
+      "question": "论文是否给出了 RAG 在手机端部署时的延迟、功耗和内存占用数据？",
+      "expected_rewritten_query": "论文是否给出了 RAG 在手机端部署时的延迟、功耗和内存占用数据？",
+      "gold_answer": "根据当前论文内容无法确定。论文没有提供手机端部署的延迟、功耗和内存占用实验数据。",
+      "gold_answer_points": [
+        "明确说明论文未提供相关信息",
+        "不编造手机端性能数据"
+      ],
+      "gold_source_pages": [],
+      "expected_answerable": false,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "Does the paper provide data on the latency, power consumption, and memory usage of RAG when deployed on mobile devices?",
+        "retrieval_queries": [
+          "Does the paper provide data on the latency, power consumption, and memory usage of RAG when deployed on mobile devices?"
+        ],
+        "answer": "当前文档未提供相关信息。",
+        "sources": [
+          {
+            "文本块": "ich we refer to as retrieval-augmented generation (RAG).\nWe build RAG models where the parametric memory is a pre-trained seq2seq transformer, and the\nnon-parametric memory is a dense vector index of Wikipedia, accessed with a pre-trained neural\nretriever. We combine these components in a probabilistic model trained end-to-end (Fig. 1). The\nretriever (Dense Passage Retriever [26], henceforth DPR) provides latent documents conditioned on\nthe input, and the seq2seq model (BART [32]) then condition",
+            "距离": 0.5683797597885132,
+            "元数据": {
+              "chunk_index": 11,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "page_number": 2,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "image_count": 0
+            },
+            "rerank_score": 0.09644461423158646
+          },
+          {
+            "文本块": "rator and retriever are jointly learned.\nThere has been extensive previous work proposing architectures to enrich systems with non-parametric\nmemory which are trained from scratch for speciﬁc tasks, e.g. memory networks [64, 55], stack-\naugmented networks [25] and memory layers [30]. In contrast, we explore a setting where both\nparametric and non-parametric memory components are pre-trained and pre-loaded with extensive\nknowledge. Crucially, by using pre-trained access mechanisms, the ability to",
+            "距离": 0.5594339966773987,
+            "元数据": {
+              "extraction_method": "text",
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "image_count": 0,
+              "chunk_index": 13,
+              "page_number": 2
+            },
+            "rerank_score": 0.06146083027124405
+          },
+          {
+            "文本块": "e proved successful in a number of domains including\nMachine Translation [18, 22] and Semantic Parsing [21]. Our approach does have several differences,\nincluding less of emphasis on lightly editing a retrieved item, but on aggregating content from several\npieces of retrieved content, as well as learning latent retrieval, and retrieving evidence documents\nrather than related training pairs. This said, RAG techniques may work well in these settings, and\ncould represent promising future work.\n6\nDi",
+            "距离": 0.5554906129837036,
+            "元数据": {
+              "chunk_index": 83,
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "page_number": 9,
+              "document_id": "37d324f4-bbc2-4f65-8617-ae73982e5bcb"
+            },
+            "rerank_score": 0.01609010435640812
+          }
+        ],
+        "returned_source_pages": [
+          2,
+          9
+        ],
+        "task_type": "qa"
+      }
+    },
+    {
+      "question_id": "LORA-01",
+      "document_key": "lora",
+      "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+      "conversation_id": "1f4fdace-0c59-4b02-8353-6b69c8e78d19",
+      "question_type": "term",
+      "question": "LoRA 的核心机制是什么？训练时哪些参数被冻结，哪些参数被更新？",
+      "expected_rewritten_query": "LoRA 的核心机制是什么，训练时哪些参数被冻结、哪些参数被更新？",
+      "gold_answer": "LoRA 将预训练权重的更新量表示为两个低秩矩阵的乘积。训练时原始预训练权重 W0 保持冻结，只更新低秩矩阵 A 和 B，最终用 BA 表示权重更新。",
+      "gold_answer_points": [
+        "用低秩矩阵分解表示权重更新",
+        "冻结原始预训练权重 W0",
+        "训练矩阵 A 和 B",
+        "权重更新写作 BA"
+      ],
+      "gold_source_pages": [
+        1,
+        2,
+        4
+      ],
+      "expected_answerable": true,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "What is the core mechanism of LoRA, and which parameters are frozen versus updated during training?",
+        "retrieval_queries": [
+          "What is the core mechanism of LoRA, and which parameters are frozen versus updated during training?"
+        ],
+        "answer": "LoRA 的核心机制是 **在原始模型的每个权重矩阵后面插入一个低秩（rank‑r）适配器**，并 **仅训练这些适配器（以及所有偏置）**，而 **冻结预训练模型的原始权重**。这样可以在保持模型表达能力的同时，大幅减少可训练参数。",
+        "sources": [
+          {
+            "文本块": "r comparison fair. Following He et al. (2021),\nwe initialize the LoRA modules to our best MNLI checkpoint when adapting to MRPC, RTE, and\nSTS-B, instead of the usual initialization; the pre-trained model stays frozen for all tasks. We report\nthe median over 5 random seeds; the result for each run is taken from the best epoch. See the\nhyperparameters used in our runs in Table 10.\n18",
+            "距离": 0.5081087350845337,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 150,
+              "image_count": 0,
+              "extraction_method": "text",
+              "page_number": 18,
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5"
+            },
+            "rerank_score": 0.6169396042823792
+          },
+          {
+            "文本块": "accumu-\nlated gradient update to weight matrices to have full-rank during adaptation. This means that when\napplying LoRA to all weight matrices and training all biases2, we roughly recover the expressive-\nness of full ﬁne-tuning by setting the LoRA rank r to the rank of the pre-trained weight matrices. In\nother words, as we increase the number of trainable parameters 3, training LoRA roughly converges\nto training the original model, while adapter-based methods converges to an MLP and preﬁx-based",
+            "距离": 0.5439207553863525,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 32,
+              "image_count": 0,
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+              "page_number": 4,
+              "extraction_method": "text"
+            },
+            "rerank_score": 0.4044833779335022
+          },
+          {
+            "文本块": "ally applicable to any neural\nnetworks with dense layers.\nThere are many directions for future works. 1) LoRA can be combined with other efﬁcient adapta-\ntion methods, potentially providing orthogonal improvement. 2) The mechanism behind ﬁne-tuning\nor LoRA is far from clear – how are features learned during pre-training transformed to do well\non downstream tasks? We believe that LoRA makes it more tractable to answer this than full ﬁne-\n12",
+            "距离": 0.544849693775177,
+            "元数据": {
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+              "chunk_index": 102,
+              "image_count": 1,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "page_number": 12,
+              "extraction_method": "text"
+            },
+            "rerank_score": 0.12188923358917236
+          }
+        ],
+        "returned_source_pages": [
+          18,
+          4,
+          12
+        ],
+        "task_type": "qa"
+      }
+    },
+    {
+      "question_id": "LORA-02",
+      "document_key": "lora",
+      "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+      "conversation_id": "257854db-a466-4205-9ce3-4b8116e82fe5",
+      "question_type": "fact",
+      "question": "与使用 Adam 全量微调 GPT-3 175B 相比，LoRA 在可训练参数量和 GPU 内存需求上分别降低了多少？",
+      "expected_rewritten_query": "与使用 Adam 全量微调 GPT-3 175B 相比，LoRA 在可训练参数量和 GPU 内存需求上分别降低了多少？",
+      "gold_answer": "论文报告 LoRA 可将可训练参数量减少约 10,000 倍，并将 GPU 内存需求降低约 3 倍。",
+      "gold_answer_points": [
+        "可训练参数量减少约 10000 倍",
+        "GPU 内存需求降低约 3 倍"
+      ],
+      "gold_source_pages": [
+        1
+      ],
+      "expected_answerable": true,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "Compared to full fine‑tuning of GPT‑3 175B with Adam, how much does LoRA reduce the number of trainable parameters and the GPU memory requirements?",
+        "retrieval_queries": [
+          "Compared to full fine‑tuning of GPT‑3 175B with Adam, how much does LoRA reduce the number of trainable parameters and the GPU memory requirements?"
+        ],
+        "answer": "LoRA 将可训练参数量降低了 **10,000 倍**，GPU 内存需求降低了 **3 倍**。",
+        "sources": [
+          {
+            "文本块": "tly reducing the number of trainable pa-\nrameters for downstream tasks. Compared to GPT-3 175B ﬁne-tuned with Adam,\nLoRA can reduce the number of trainable parameters by 10,000 times and the\nGPU memory requirement by 3 times. LoRA performs on-par or better than ﬁne-\ntuning in model quality on RoBERTa, DeBERTa, GPT-2, and GPT-3, despite hav-\ning fewer trainable parameters, a higher training throughput, and, unlike adapters,\nno additional inference latency. We also provide an empirical investigati",
+            "距离": 0.2528077960014343,
+            "元数据": {
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+              "extraction_method": "text",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 3,
+              "image_count": 0,
+              "page_number": 1
+            },
+            "rerank_score": 0.999862551689148
+          },
+          {
+            "文本块": "nd all model parameters undergo gradient updates.A simple\nvariant is to update only some layers while freezing others. We include one such baseline reported\nin prior work (Li & Liang, 2021) on GPT-2, which adapts just the last two layers (FTTop2).\n4We still need the 350GB model during deployment; however, storing 100 adapted models only requires\n350GB + 35MB * 100 ≈354GB as opposed to 100 * 350GB ≈35TB.\n5For GPT-3 175B, the training throughput for full ﬁne-tuning is 32.5 tokens/s per V100 GPU; w",
+            "距离": 0.447551429271698,
+            "元数据": {
+              "image_count": 0,
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+              "extraction_method": "text",
+              "chunk_index": 43,
+              "page_number": 5,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405"
+            },
+            "rerank_score": 0.9097455143928528
+          },
+          {
+            "文本块": " domains. As\nwe pre-train larger models, full ﬁne-tuning, which retrains all model parameters,\nbecomes less feasible. Using GPT-3 175B as an example – deploying indepen-\ndent instances of ﬁne-tuned models, each with 175B parameters, is prohibitively\nexpensive. We propose Low-Rank Adaptation, or LoRA, which freezes the pre-\ntrained model weights and injects trainable rank decomposition matrices into each\nlayer of the Transformer architecture, greatly reducing the number of trainable pa-\nrameters ",
+            "距离": 0.4619656205177307,
+            "元数据": {
+              "page_number": 1,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "image_count": 0,
+              "chunk_index": 2,
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5"
+            },
+            "rerank_score": 0.8564471006393433
+          }
+        ],
+        "returned_source_pages": [
+          1,
+          5
+        ],
+        "task_type": "qa"
+      }
+    },
+    {
+      "question_id": "LORA-03",
+      "document_key": "lora",
+      "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+      "conversation_id": "6073fbc7-5aab-4b59-b396-51c7e9812f3f",
+      "question_type": "comparison",
+      "question": "为什么 LoRA 相比传统 Adapter 更适合对推理延迟敏感的线上服务？",
+      "expected_rewritten_query": "为什么 LoRA 相比传统 Adapter 更适合对推理延迟敏感的线上服务？",
+      "gold_answer": "传统 Adapter 会增加额外层和顺序计算，从而引入推理延迟；LoRA 的低秩更新可以在部署时合并进原始权重，因此相对全量微调模型不会增加额外推理延迟。",
+      "gold_answer_points": [
+        "Adapter 增加额外层或顺序计算",
+        "Adapter 可能引入推理延迟",
+        "LoRA 权重可以合并进原始权重",
+        "LoRA 不增加额外推理延迟"
+      ],
+      "gold_source_pages": [
+        4,
+        5,
+        9
+      ],
+      "expected_answerable": true,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "Why is LoRA more suitable than traditional Adapter for inference latency-sensitive online services?",
+        "retrieval_queries": [
+          "Why is LoRA more suitable than traditional Adapter for inference latency-sensitive online services?"
+        ],
+        "answer": "LoRA 在推理时不需要额外的运算层或参数插入，直接把低秩增量与原模型权重融合，因而**不会产生额外的前向推理延迟**；同时它保留完整的输入序列长度，保持模型质量，并且大部分参数可共享，支持快速任务切换。相比之下，传统 Adapter 通常在网络中插入额外的适配层，导致推理时需要额外的矩阵乘法，增加延迟。",
+        "sources": [
+          {
+            "文本块": "nation of LoRA+PE doesn’t perform better than LoRA, possibly because LoRA\non its own already achieves performance comparable to the human baseline. Secondly, we notice\nthat LoRA+PL performs slightly worse than LoRA even with more trainable parameters. We at-\ntribute this to the fact that preﬁx-layer tuning is very sensitive to the choice of learning rate and thus\nmakes the optimization of LoRA weights more difﬁcult in LoRA+PL.\nF\nADDITIONAL EMPIRICAL EXPERIMENTS\nF.1\nADDITIONAL EXPERIMENTS ON GPT-",
+            "距离": 0.4970739185810089,
+            "元数据": {
+              "page_number": 21,
+              "chunk_index": 163,
+              "extraction_method": "text",
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5"
+            },
+            "rerank_score": 0.7644912004470825
+          },
+          {
+            "文本块": "storage/switching cost for hosting independent instances for different tasks. We propose\nLoRA, an efﬁcient adaptation strategy that neither introduces inference latency nor reduces input\nsequence length while retaining high model quality. Importantly, it allows for quick task-switching\nwhen deployed as a service by sharing the vast majority of the model parameters. While we focused\non Transformer language models, the proposed principles are generally applicable to any neural\nnetworks with dense ",
+            "距离": 0.5511614680290222,
+            "元数据": {
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+              "extraction_method": "text",
+              "page_number": 12,
+              "chunk_index": 101,
+              "image_count": 1,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405"
+            },
+            "rerank_score": 0.6613842844963074
+          },
+          {
+            "文本块": "ally applicable to any neural\nnetworks with dense layers.\nThere are many directions for future works. 1) LoRA can be combined with other efﬁcient adapta-\ntion methods, potentially providing orthogonal improvement. 2) The mechanism behind ﬁne-tuning\nor LoRA is far from clear – how are features learned during pre-training transformed to do well\non downstream tasks? We believe that LoRA makes it more tractable to answer this than full ﬁne-\n12",
+            "距离": 0.47243642807006836,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+              "image_count": 1,
+              "page_number": 12,
+              "chunk_index": 102
+            },
+            "rerank_score": 0.36797189712524414
+          }
+        ],
+        "returned_source_pages": [
+          21,
+          12
+        ],
+        "task_type": "qa"
+      }
+    },
+    {
+      "question_id": "LORA-04",
+      "document_key": "lora",
+      "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+      "conversation_id": "ed4e5cc5-a14a-46a1-b307-d504de2073a4",
+      "question_type": "unanswerable",
+      "question": "论文是否在医学影像诊断数据集上验证了 LoRA，并报告了疾病分类准确率？",
+      "expected_rewritten_query": "论文是否在医学影像诊断数据集上验证了 LoRA，并报告了疾病分类准确率？",
+      "gold_answer": "根据当前论文内容无法确定。论文没有报告医学影像诊断数据集或疾病分类准确率。",
+      "gold_answer_points": [
+        "明确说明论文未提供相关实验",
+        "不虚构医学数据集或准确率"
+      ],
+      "gold_source_pages": [],
+      "expected_answerable": false,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "Did the paper validate LoRA on a medical imaging diagnostic dataset and report disease classification accuracy?",
+        "retrieval_queries": [
+          "Did the paper validate LoRA on a medical imaging diagnostic dataset and report disease classification accuracy?"
+        ],
+        "answer": "当前文档未提供相关信息。",
+        "sources": [
+          {
+            "文本块": "127\n2.5030\n256\n1.16\n68.92\n8.6982\n0.4629\n0.7128\n2.5012\n512\n1.16\n68.78\n8.6857\n0.4637\n0.7128\n2.5025\n1024\n1.17\n69.37\n8.7495\n0.4659\n0.7149\n2.5090\nTable 18: Validation loss and test set metrics on E2E NLG Challenge achieved by LoRA with\ndifferent rank r using GPT-2 Medium. Unlike on GPT-3 where r = 1 sufﬁces for many tasks, here\nthe performance peaks at r = 16 for validation loss and r = 4 for BLEU, suggesting the GPT-2\nMedium has a similar intrinsic rank for adaptation compared to GPT-3 175B. Note th",
+            "距离": 0.7399916648864746,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "page_number": 26,
+              "image_count": 5,
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+              "extraction_method": "text",
+              "chunk_index": 190
+            },
+            "rerank_score": 0.03089963085949421
+          },
+          {
+            "文本块": "ation into the low-rank update matrices.\nH.1\nCORRELATION BETWEEN LORA MODULES\nSee Figure 6 and Figure 7 for how the results presented in Figure 3 and Figure 4 generalize to other\nlayers.\nH.2\nEFFECT OF r ON GPT-2\nWe repeat our experiment on the effect of r (Section 7.2) in GPT-2. Using the E2E NLG Challenge\ndataset as an example, we report the validation loss and test metrics achieved by different choices\nof r after training for 26,000 steps. We present our result in Table 18. The optimal rank fo",
+            "距离": 0.7134383916854858,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+              "extraction_method": "text",
+              "image_count": 0,
+              "chunk_index": 181,
+              "page_number": 24
+            },
+            "rerank_score": 0.029088575392961502
+          },
+          {
+            "文本块": "45.1\nTable 4: Performance of different adaptation methods on GPT-3 175B. We report the logical form\nvalidation accuracy on WikiSQL, validation accuracy on MultiNLI-matched, and Rouge-1/2/L on\nSAMSum. LoRA performs better than prior approaches, including full ﬁne-tuning. The results\non WikiSQL have a ﬂuctuation around ±0.5%, MNLI-m around ±0.1%, and SAMSum around\n±0.2/±0.2/±0.1 for the three metrics.\n5.5\nSCALING UP TO GPT-3 175B\nAs a ﬁnal stress test for LoRA, we scale up to GPT-3 with 175 billio",
+            "距离": 0.6844621300697327,
+            "元数据": {
+              "extraction_method": "text",
+              "document_id": "9228e261-4bff-4394-b8a0-83df445ef8a5",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "page_number": 8,
+              "chunk_index": 64,
+              "image_count": 0
+            },
+            "rerank_score": 0.019336560741066933
+          }
+        ],
+        "returned_source_pages": [
+          26,
+          24,
+          8
+        ],
+        "task_type": "qa"
+      }
+    },
+    {
+      "question_id": "COT-01",
+      "document_key": "cot",
+      "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+      "conversation_id": "40aaf214-c49a-4777-84a5-5385040fccf5",
+      "question_type": "term",
+      "question": "什么是 Chain-of-Thought Prompting，它如何引导模型解决复杂问题？",
+      "expected_rewritten_query": "什么是 Chain-of-Thought Prompting，它如何引导模型解决复杂问题？",
+      "gold_answer": "Chain-of-Thought Prompting 是在 few-shot 提示中提供包含中间推理步骤的示例，引导模型生成自己的推理链，将复杂问题分解为多个中间步骤后得到答案。",
+      "gold_answer_points": [
+        "在提示示例中提供中间推理步骤",
+        "引导模型生成推理链",
+        "将多步问题分解为中间步骤"
+      ],
+      "gold_source_pages": [
+        1,
+        3
+      ],
+      "expected_answerable": true,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "What is Chain-of-Thought Prompting, and how does it guide the model to solve complex problems?",
+        "retrieval_queries": [
+          "What is Chain-of-Thought Prompting, and how does it guide the model to solve complex problems?"
+        ],
+        "answer": "**Chain‑of‑Thought Prompting** 是一种在提示中要求模型先生成一系列中间推理步骤（自然语言“思考链”），再给出最终答案的技术。  \n它通过让模型把多步问题拆解成若干可解释的子步骤，帮助模型在推理过程中保持连贯性，从而在算术、常识和符号推理等复杂任务上显著提升性能。",
+        "sources": [
+          {
+            "文本块": "thought, output⟩. A chain of thought is\na series of intermediate natural language reasoning steps that lead to the ﬁnal output, and we refer to\nthis approach as chain-of-thought prompting. An example prompt is shown in Figure 1.\nWe present empirical evaluations on arithmetic, commonsense, and symbolic reasoning benchmarks,\nshowing that chain-of-thought prompting outperforms standard prompting, sometimes to a striking\ndegree. Figure 2 illustrates one such result—on the GSM8K benchmark of math wor",
+            "距离": 0.39643847942352295,
+            "元数据": {
+              "extraction_method": "text",
+              "page_number": 2,
+              "image_count": 0,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 13
+            },
+            "rerank_score": 0.908355712890625
+          },
+          {
+            "文本块": "at it\nmimics a step-by-step thought process for arriving at the answer (and also, solutions/explanations\ntypically come after the ﬁnal answer (Narang et al., 2020; Wiegreffe et al., 2022; Lampinen et al.,\n2022, inter alia)).\nChain-of-thought prompting has several attractive properties as an approach for facilitating reasoning\nin language models.\n1. First, chain of thought, in principle, allows models to decompose multi-step problems into\nintermediate steps, which means that additional computatio",
+            "距离": 0.4432741403579712,
+            "元数据": {
+              "page_number": 3,
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 18,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "extraction_method": "text"
+            },
+            "rerank_score": 0.8601640462875366
+          },
+          {
+            "文本块": "Chain-of-Thought Prompting Elicits Reasoning\nin Large Language Models\nJason Wei\nXuezhi Wang\nDale Schuurmans\nMaarten Bosma\nBrian Ichter\nFei Xia\nEd H. Chi\nQuoc V. Le\nDenny Zhou\nGoogle Research, Brain Team\n{jasonwei,dennyzhou}@google.com\nAbstract\nWe explore how generating a chain of thought—a series of intermediate reasoning\nsteps—signiﬁcantly improves the ability of large language models to perform\ncomplex reasoning. In particular, we show how such reasoning abilities emerge\nnaturally in sufﬁcient",
+            "距离": 0.3422985076904297,
+            "元数据": {
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "chunk_index": 1,
+              "page_number": 1,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "image_count": 2
+            },
+            "rerank_score": 0.697517454624176
+          }
+        ],
+        "returned_source_pages": [
+          2,
+          3,
+          1
+        ],
+        "task_type": "qa"
+      }
+    },
+    {
+      "question_id": "COT-02",
+      "document_key": "cot",
+      "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+      "conversation_id": "4f11a67e-e14e-4704-90fa-7bf29f7b512c",
+      "question_type": "fact",
+      "question": "论文使用多少个思维链示例，就让 PaLM 540B 在 GSM8K 上达到当时最佳结果？",
+      "expected_rewritten_query": "论文使用多少个思维链示例，就让 PaLM 540B 在 GSM8K 上达到当时最佳结果？",
+      "gold_answer": "论文使用了 8 个思维链示例，并报告 PaLM 540B 在 GSM8K 上达到当时最佳准确率，超过带验证器的微调 GPT-3。",
+      "gold_answer_points": [
+        "使用 8 个思维链示例",
+        "PaLM 540B 在 GSM8K 达到当时最佳结果",
+        "超过带验证器的微调 GPT-3"
+      ],
+      "gold_source_pages": [
+        1,
+        2
+      ],
+      "expected_answerable": true,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "How many chain‑of‑thought examples were used in the paper to enable PaLM 540B to achieve the best result on GSM8K at that time?",
+        "retrieval_queries": [
+          "How many chain‑of‑thought examples were used in the paper to enable PaLM 540B to achieve the best result on GSM8K at that time?"
+        ],
+        "answer": "当前文档未提供相关信息。",
+        "sources": [
+          {
+            "文本块": "1\nIntroduction\nMath Word Problems (GSM8K)\n0\n20\n40\n60\n80\n100\n33\n55\n18\n57\nSolve rate (%)\nFinetuned GPT-3 175B\nPrior best\nPaLM 540B: standard prompting\nPaLM 540B: chain-of-thought prompting\nFigure 2:\nPaLM 540B uses chain-of-\nthought prompting to achieve new state-\nof-the-art performance on the GSM8K\nbenchmark of math word problems.\nFinetuned GPT-3 and prior best are from\nCobbe et al. (2021).\nThe NLP landscape has recently been revolutionized by\nlanguage models (Peters et al., 2018; Devlin et al., 2",
+            "距离": 0.5076999664306641,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "image_count": 0,
+              "extraction_method": "text",
+              "chunk_index": 7,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "page_number": 2
+            },
+            "rerank_score": 0.9612030982971191
+          },
+          {
+            "文本块": "ep to solve, performance im-\nprovements were either negative or very small\n(see Appendix Table 3).\nThird, chain-of-thought prompting via GPT-3\n175B and PaLM 540B compares favorably to\nprior state of the art, which typically ﬁnetunes a\ntask-speciﬁc model on a labeled training dataset.\nFigure 4 shows how PaLM 540B uses chain-of-\nthought prompting to achieve new state of the art\non GSM8K, SVAMP, and MAWPS (though note\nthat standard prompting already passed the prior\nbest for SVAMP). On the other tw",
+            "距离": 0.49855297803878784,
+            "元数据": {
+              "page_number": 5,
+              "extraction_method": "text",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 40,
+              "image_count": 0,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61"
+            },
+            "rerank_score": 0.8997560143470764
+          },
+          {
+            "文本块": " passed the prior\nbest for SVAMP). On the other two datasets,\nAQuA and ASDiv, PaLM with chain-of-thought\nprompting reaches within 2% of the state of the\nart (Appendix Table 2).\nTo better understand why chain-of-thought\nprompting works, we manually examined model-\ngenerated chains of thought by LaMDA 137B\nfor GSM8K. Of 50 random examples where the\nmodel returned the correct ﬁnal answer, all of\nthe generated chains of thought were also log-\nically and mathematically correct except two\nthat coincid",
+            "距离": 0.5204653739929199,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "chunk_index": 41,
+              "image_count": 0,
+              "page_number": 5,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61"
+            },
+            "rerank_score": 0.8076348900794983
+          }
+        ],
+        "returned_source_pages": [
+          2,
+          5
+        ],
+        "task_type": "qa"
+      }
+    },
+    {
+      "question_id": "COT-03",
+      "document_key": "cot",
+      "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+      "conversation_id": "4a53d5b3-ede3-4ebc-9e12-91233c72cb6a",
+      "question_type": "summary",
+      "question": "总结论文评估思维链提示时覆盖的三类推理任务，并各举出至少一个数据集或任务。",
+      "expected_rewritten_query": "总结论文评估 Chain-of-Thought Prompting 时覆盖的三类推理任务，并列举对应数据集或任务。",
+      "gold_answer": "论文覆盖三类任务：算术推理，如 GSM8K、SVAMP、MAWPS、AQuA 或 ASDiv；常识推理，如 CSQA、StrategyQA、Date Understanding、Sports Understanding 或 SayCan；符号推理，包括末字母拼接和硬币翻转任务。",
+      "gold_answer_points": [
+        "算术推理及至少一个对应数据集",
+        "常识推理及至少一个对应数据集",
+        "符号推理及至少一个对应任务"
+      ],
+      "gold_source_pages": [
+        5,
+        7,
+        8
+      ],
+      "expected_answerable": true,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "Summarize the three categories of reasoning tasks covered when evaluating chain‑of‑thought prompts in the paper, and provide at least one dataset or task for each category.",
+        "retrieval_queries": [
+          "Summarize the three categories of reasoning tasks covered when evaluating chain‑of‑thought prompts in the paper, and provide at least one dataset or task for each category.",
+          "What are the three categories of reasoning tasks evaluated when using chain‑of‑thought prompting in the paper?",
+          "Which dataset(s) from the paper are used to evaluate the arithmetic reasoning category?",
+          "Which dataset(s) from the paper are used to evaluate the commonsense reasoning category?",
+          "Which dataset(s) from the paper are used to evaluate the symbolic reasoning category?"
+        ],
+        "answer": "**主要任务类型** | **主要实验结论**  \n--- | ---  \n**数学文字题**（如 GSM8K） | 采用链式思维提示后，模型在数学文字题数据集上显著提升，尤其在多步推理任务中表现更好。  \n**常识推理**（常识推理任务） | 通过链式思维提示，模型在常识推理任务上取得更高准确率，显示出对人类常识推理流程的更好模拟。  \n**符号操作**（符号操作任务） | 在符号操作任务中，链式思维提示帮助模型更准确地执行符号推理步骤，提升整体性能。",
+        "sources": [
+          {
+            "文本块": " Third, chain-of-thought reasoning can be used for tasks such as math word problems,\ncommonsense reasoning, and symbolic manipulation, and is potentially applicable (at least\nin principle) to any task that humans can solve via language.\n4. Finally, chain-of-thought reasoning can be readily elicited in sufﬁciently large off-the-shelf\nlanguage models simply by including examples of chain of thought sequences into the\nexemplars of few-shot prompting.\nIn empirical experiments, we will observe the ut",
+            "距离": 0.4564368724822998,
+            "元数据": {
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "extraction_method": "text",
+              "image_count": 0,
+              "chunk_index": 20,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "page_number": 3
+            },
+            "rerank_score": 0.9220808148384094,
+            "matched_queries": [
+              "What are the three categories of reasoning tasks evaluated when using chain‑of‑thought prompting in the paper?"
+            ]
+          },
+          {
+            "文本块": "e gain is small for the\nsubsets of MAWPS that only require one or two steps (SingleOP, SingleEq, and AddSub), for which\nPaLM 540B already achieves performance of 90% or higher (and it is also generally true that there is\nless headroom for improvement when performance is already strong).\nAlthough in this paper we focused on multi-step reasoning tasks (arithmetic, commonsense, and\nsymbolic), chain-of-thought prompting can potentially be applied to any task for which humans use a\n“chain of thought”",
+            "距离": 0.40641969442367554,
+            "元数据": {
+              "extraction_method": "text",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "page_number": 19,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "image_count": 0,
+              "chunk_index": 166
+            },
+            "rerank_score": 0.6547390818595886,
+            "matched_queries": [
+              "Summarize the three categories of reasoning tasks covered when evaluating chain‑of‑thought prompts in the paper, and provide at least one dataset or task for each category.",
+              "What are the three categories of reasoning tasks evaluated when using chain‑of‑thought prompting in the paper?"
+            ]
+          },
+          {
+            "文本块": "ess of writing this paper.\nThe emergence of chain-of-thought reasoning as a result of model scale has been a prevailing theme\n(Wei et al., 2022b). For many reasoning tasks where standard prompting has a ﬂat scaling curve, chain-\nof-thought prompting leads to dramatically increasing scaling curves. Chain-of-thought prompting\nappears to expand the set of tasks that large language models can perform successfully—in other\nwords, our work underscores that standard prompting only provides a lower boun",
+            "距离": 0.43012645840644836,
+            "元数据": {
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "chunk_index": 76,
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "page_number": 9
+            },
+            "rerank_score": 0.5394940972328186,
+            "matched_queries": [
+              "Summarize the three categories of reasoning tasks covered when evaluating chain‑of‑thought prompts in the paper, and provide at least one dataset or task for each category.",
+              "What are the three categories of reasoning tasks evaluated when using chain‑of‑thought prompting in the paper?"
+            ]
+          },
+          {
+            "文本块": "any task for which humans use a\n“chain of thought” to solve (at least in principle). We leave the empirical evaluation of chain-of-thought\nprompting on such diverse tasks (e.g., machine translation, etc.) to future work.\nA.4\nWhy is prompting with the equation only not enough for some arithmetic reasoning\ndatasets?\nPrompting with the equation only as an intermediate step does help on many datasets, especially when\nthe datasets only require a few reasoning steps (SVAMP, ASDiv, MAWPS). For GSM8K, h",
+            "距离": 0.37968695163726807,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 167,
+              "extraction_method": "text",
+              "image_count": 0,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "page_number": 19
+            },
+            "rerank_score": 0.5056624412536621,
+            "matched_queries": [
+              "Summarize the three categories of reasoning tasks covered when evaluating chain‑of‑thought prompts in the paper, and provide at least one dataset or task for each category.",
+              "What are the three categories of reasoning tasks evaluated when using chain‑of‑thought prompting in the paper?",
+              "Which dataset(s) from the paper are used to evaluate the arithmetic reasoning category?",
+              "Which dataset(s) from the paper are used to evaluate the commonsense reasoning category?",
+              "Which dataset(s) from the paper are used to evaluate the symbolic reasoning category?"
+            ]
+          },
+          {
+            "文本块": " used in Brown et al. (2020), it works poorly on tasks that require reasoning\nabilities, and often does not improve substantially with increasing language model scale (Rae et al.,\n2021). In this paper, we combine the strengths of these two ideas in a way that avoids their limitations.\nSpeciﬁcally, we explore the ability of language models to perform few-shot prompting for reasoning\ntasks, given a prompt that consists of triples: ⟨input, chain of thought, output⟩. A chain of thought is\na series o",
+            "距离": 0.44038084149360657,
+            "元数据": {
+              "page_number": 2,
+              "image_count": 0,
+              "extraction_method": "text",
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 12
+            },
+            "rerank_score": 0.4742288291454315,
+            "matched_queries": [
+              "Summarize the three categories of reasoning tasks covered when evaluating chain‑of‑thought prompts in the paper, and provide at least one dataset or task for each category."
+            ]
+          },
+          {
+            "文本块": "source (examples in this dataset already included reasoning steps like a chain of thought).2 Fig-\nure 6 shows that these prompts performed comparably with our manually written exemplars, also\nsubstantially outperforming standard prompting.\nIn addition to robustness to annotators, independently-written chains of thought, different exemplars,\nand various language models, we also ﬁnd that chain-of-thought prompting for arithmetic reasoning\nis robust to different exemplar orders and varying numbers ",
+            "距离": 0.5407742261886597,
+            "元数据": {
+              "chunk_index": 56,
+              "extraction_method": "text",
+              "image_count": 0,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "page_number": 7,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405"
+            },
+            "rerank_score": 0.34756553173065186,
+            "matched_queries": [
+              "Which dataset(s) from the paper are used to evaluate the arithmetic reasoning category?",
+              "Which dataset(s) from the paper are used to evaluate the commonsense reasoning category?",
+              "Which dataset(s) from the paper are used to evaluate the symbolic reasoning category?"
+            ]
+          },
+          {
+            "文本块": "ng, and other. The other category includes hallucinations,\nrepetitive outputs, and symbol mapping errors. Scaling PaLM to 540B ﬁxed a substantial portion of\nerrors in all categories.\nThere are also three notable points regarding why small language models fail. The ﬁrst observation\nis that small language models fail at even relatively easy symbol mapping tasks. As demonstrated\nin Section 5, for even symbolic reasoning tasks that only require generalization to new examples\nusing the same chain of ",
+            "距离": 0.5601691007614136,
+            "元数据": {
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "chunk_index": 139,
+              "page_number": 16,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "extraction_method": "text"
+            },
+            "rerank_score": 0.33689984679222107,
+            "matched_queries": [
+              "Which dataset(s) from the paper are used to evaluate the commonsense reasoning category?",
+              "Which dataset(s) from the paper are used to evaluate the symbolic reasoning category?"
+            ]
+          },
+          {
+            "文本块": "can learn via a few examples with natural language data about the task (c.f. automatically learning\nthe patterns underlying inputs and outputs via a large training dataset).\n2\nChain-of-Thought Prompting\nConsider one’s own thought process when solving a complicated reasoning task such as a multi-step\nmath word problem. It is typical to decompose the problem into intermediate steps and solve each\nbefore giving the ﬁnal answer: “After Jane gives 2 ﬂowers to her mom she has 10 . . . then after she\ng",
+            "距离": 0.3922307789325714,
+            "元数据": {
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "chunk_index": 15,
+              "page_number": 2,
+              "image_count": 0
+            },
+            "rerank_score": 0.33083003759384155,
+            "matched_queries": [
+              "Summarize the three categories of reasoning tasks covered when evaluating chain‑of‑thought prompts in the paper, and provide at least one dataset or task for each category.",
+              "Which dataset(s) from the paper are used to evaluate the arithmetic reasoning category?",
+              "Which dataset(s) from the paper are used to evaluate the symbolic reasoning category?"
+            ]
+          },
+          {
+            "文本块": " Summary of math word problem benchmarks we use in this paper with examples. N:\nnumber of evaluation examples.\nDataset\nN\nExample problem\nGSM8K\n1,319 Josh decides to try ﬂipping a house. He buys a house for $80,000 and then puts\nin $50,000 in repairs. This increased the value of the house by 150%. How\nmuch proﬁt did he make?\nSVAMP\n1,000 Each pack of dvds costs 76 dollars. If there is a discount of 25 dollars on each\npack. How much do you have to pay to buy each pack?\nASDiv\n2,096 Ellen has six mor",
+            "距离": 0.5671998262405396,
+            "元数据": {
+              "page_number": 29,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "image_count": 0,
+              "chunk_index": 242,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text"
+            },
+            "rerank_score": 0.02724747359752655,
+            "matched_queries": [
+              "Which dataset(s) from the paper are used to evaluate the arithmetic reasoning category?",
+              "Which dataset(s) from the paper are used to evaluate the commonsense reasoning category?"
+            ]
+          }
+        ],
+        "returned_source_pages": [
+          3,
+          19,
+          9,
+          2,
+          7,
+          16,
+          29
+        ],
+        "task_type": "summary"
+      }
+    },
+    {
+      "question_id": "COT-04",
+      "document_key": "cot",
+      "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+      "conversation_id": "790a2ec9-d4d1-40fc-9975-c52cf107de08",
+      "question_type": "unanswerable",
+      "question": "论文是否量化了在线 API 使用思维链提示时的响应延迟和每次请求费用？",
+      "expected_rewritten_query": "论文是否量化了在线 API 使用思维链提示时的响应延迟和每次请求费用？",
+      "gold_answer": "根据当前论文内容无法确定。论文没有提供在线 API 响应延迟或每次请求费用的量化结果。",
+      "gold_answer_points": [
+        "明确说明论文未提供相关量化结果",
+        "不编造延迟或费用"
+      ],
+      "gold_source_pages": [],
+      "expected_answerable": false,
+      "status": "success",
+      "error": null,
+      "actual": {
+        "rewritten_query": "Did the paper quantify the response latency and per‑request cost when using chain‑of‑thought prompts with an online API?",
+        "retrieval_queries": [
+          "Did the paper quantify the response latency and per‑request cost when using chain‑of‑thought prompts with an online API?"
+        ],
+        "answer": "当前文档未提供相关信息。",
+        "sources": [
+          {
+            "文本块": "that there appears to be utility from\nexpressing intermediate steps via natural language.\nChain of thought after answer. Another potential beneﬁt of\nchain-of-thought prompting could simply be that such prompts\nallow the model to better access relevant knowledge acquired\nduring pretraining. Therefore, we test an alternative conﬁgura-\ntion where the chain of thought prompt is only given after the\nanswer, isolating whether the model actually depends on the\nproduced chain of thought to give the ﬁnal",
+            "距离": 0.47606146335601807,
+            "元数据": {
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "extraction_method": "text",
+              "chunk_index": 49,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "image_count": 0,
+              "page_number": 6
+            },
+            "rerank_score": 0.02114199474453926
+          },
+          {
+            "文本块": "source (examples in this dataset already included reasoning steps like a chain of thought).2 Fig-\nure 6 shows that these prompts performed comparably with our manually written exemplars, also\nsubstantially outperforming standard prompting.\nIn addition to robustness to annotators, independently-written chains of thought, different exemplars,\nand various language models, we also ﬁnd that chain-of-thought prompting for arithmetic reasoning\nis robust to different exemplar orders and varying numbers ",
+            "距离": 0.49218589067459106,
+            "元数据": {
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "extraction_method": "text",
+              "chunk_index": 56,
+              "image_count": 0,
+              "page_number": 7,
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61"
+            },
+            "rerank_score": 0.017490986734628677
+          },
+          {
+            "文本块": "thought, output⟩. A chain of thought is\na series of intermediate natural language reasoning steps that lead to the ﬁnal output, and we refer to\nthis approach as chain-of-thought prompting. An example prompt is shown in Figure 1.\nWe present empirical evaluations on arithmetic, commonsense, and symbolic reasoning benchmarks,\nshowing that chain-of-thought prompting outperforms standard prompting, sometimes to a striking\ndegree. Figure 2 illustrates one such result—on the GSM8K benchmark of math wor",
+            "距离": 0.5105044841766357,
+            "元数据": {
+              "extraction_method": "text",
+              "image_count": 0,
+              "user_id": "4ed84adb-d403-4661-92c9-90939f7ba405",
+              "document_id": "8bc8bbfa-84f8-4a2f-b2b7-eb0072855c61",
+              "chunk_index": 13,
+              "page_number": 2
+            },
+            "rerank_score": 0.01693137362599373
+          }
+        ],
+        "returned_source_pages": [
+          6,
+          7,
+          2
+        ],
+        "task_type": "qa"
+      }
+    }
+  ]
+}
