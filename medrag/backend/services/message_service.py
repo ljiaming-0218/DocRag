@@ -1,9 +1,22 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from stores.conversation_store import find_conversation_by_id, update_conversation_updated_at
-from stores.message_store import find_recent_messages_by_conversation, insert_message, find_messages_by_conversation
+from stores.conversation_store import (
+    find_conversation_by_id,
+    update_conversation_updated_at,
+)
+from stores.message_store import (
+    find_messages_by_conversation,
+    find_recent_messages_by_conversation,
+    insert_message,
+    update_message_status,
+)
 
+ALLOWED_MESSAGE_STATUSES = {
+    "pending",
+    "completed",
+    "failed",
+}
 
 async def create_message(
     conversation_id: str,
@@ -13,6 +26,7 @@ async def create_message(
     sources: list[dict] | None = None,
     rewritten_query: str | None = None,
     retrieval_queries: list[str] | None = None,
+    status: str = "completed",
 ) -> dict:
     conversation_id = conversation_id.strip()
     if not conversation_id:
@@ -53,6 +67,11 @@ async def create_message(
         if query.strip()
     ]
 
+    status = status.strip().lower()
+
+    if status not in ALLOWED_MESSAGE_STATUSES:
+        raise ValueError("非法的消息状态")
+
     now = datetime.now(timezone.utc)
     message_id = str(uuid4())
 
@@ -66,6 +85,9 @@ async def create_message(
         "retrieval_queries": retrieval_queries,
         "created_at": now,
         "task_type": task_type,
+        "status": status,
+        "error_code": None,
+        "error_message": None,
     }
 
     await insert_message(message)
@@ -80,6 +102,9 @@ async def create_message(
         "retrieval_queries": message["retrieval_queries"],
         "created_at": message["created_at"],
         "task_type": message.get("task_type"),
+        "status": status,
+        "error_code": None,
+        "error_message": None,
     }
 
 
@@ -117,6 +142,9 @@ async def list_messages(user_id: str, conversation_id: str) -> list[dict]:
             ),
             "created_at": message["created_at"],
             "task_type": message.get("task_type"),
+            "status": message.get("status", "completed"),
+            "error_code": message.get("error_code"),
+            "error_message": message.get("error_message"),
         })
 
     return results
@@ -137,7 +165,11 @@ async def get_recent_messages(
     if conversation is None:
         raise ValueError("会话不存在")
     messages = await find_recent_messages_by_conversation(conversation_id, limit)
-
+    messages = [
+        message
+        for message in messages
+        if message.get("status", "completed") == "completed"
+    ]
     results = []
 
     for message in messages:
@@ -154,6 +186,33 @@ async def get_recent_messages(
             ),
             "created_at": message["created_at"],
             "task_type": message.get("task_type"),
+            "status": message.get("status", "completed"),
+            "error_code": message.get("error_code"),
+            "error_message": message.get("error_message"),
         })
 
     return results
+
+
+async def set_message_status(
+    message_id: str,
+    status: str,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    message_id = message_id.strip()
+    if not message_id:
+        raise ValueError("message_id 不能为空")
+
+    if status not in ALLOWED_MESSAGE_STATUSES:
+        raise ValueError("非法的消息状态")
+
+    updated = await update_message_status(
+        message_id,
+        status,
+        error_code,
+        error_message,
+    )
+
+    if not updated:
+        raise ValueError("消息不存在")

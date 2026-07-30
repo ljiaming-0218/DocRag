@@ -21,3 +21,10 @@ OCR_LANGUAGES = environ.get("OCR_LANGUAGES", "eng+chi_sim")
 OCR_DPI = int(environ.get("OCR_DPI", "300"))
 OCR_MIN_TEXT_CHARS = int(environ.get("OCR_MIN_TEXT_CHARS", "20"))
 OCR_TESSDATA_DIR = environ.get("TESSDATA_PREFIX")
+MAX_UPLOAD_SIZE_MB = int(
+    environ.get("MAX_UPLOAD_SIZE_MB", "20")
+)
+
+MAX_UPLOAD_SIZE_BYTES = (
+    MAX_UPLOAD_SIZE_MB * 1024 * 1024
+)

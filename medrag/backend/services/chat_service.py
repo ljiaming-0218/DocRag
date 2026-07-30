@@ -3,7 +3,11 @@ from asyncio import to_thread
 from services.agent_router_service import route_task
 from services.document_service import get_existing_document_for_user
 from services.llm_service import generate_answer
-from services.message_service import create_message, get_recent_messages
+from services.message_service import (
+    create_message,
+    get_recent_messages,
+    set_message_status,
+)
 from services.prompt_service import (
     build_rag_prompt,
     build_report_prompt,
@@ -83,39 +87,52 @@ async def prepare_ask_context(
         conversation_id,
         "user",
         query,
-    )
-    rewritten_query = await to_thread(
-        rewrite_query,
-        history,
-        query,
-        document.get("language", "unknown"),
+        status="pending",
     )
 
-    if task_type == "summary":
-        summary_result = await to_thread(
-            search_summary_chunks,
-            user_id,
-            conversation["document_id"],
-            rewritten_query,
+    try:
+        rewritten_query = await to_thread(
+            rewrite_query,
+            history,
+            query,
+            document.get("language", "unknown"),
         )
-        sources = summary_result["sources"]
-        retrieval_queries = summary_result["retrieval_queries"]
-    else:
-        sources = await to_thread(
-            search_relevant_chunks,
-            user_id,
-            conversation["document_id"],
-            rewritten_query,
-            n_results,
-        )
-        retrieval_queries = [rewritten_query]
+        if task_type == "summary":
+            summary_result = await to_thread(
+                search_summary_chunks,
+                user_id,
+                conversation["document_id"],
+                rewritten_query,
+            )
+            sources = summary_result["sources"]
+            retrieval_queries = summary_result["retrieval_queries"]
+        else:
+            sources = await to_thread(
+                search_relevant_chunks,
+                user_id,
+                conversation["document_id"],
+                rewritten_query,
+                n_results,
+            )
+            retrieval_queries = [rewritten_query]
 
-    prompt = build_rag_prompt(
-        query,
-        sources,
-        resolved_user_type,
-        history,
-    )
+        prompt = build_rag_prompt(
+            query,
+            sources,
+            resolved_user_type,
+            history,
+        )
+    except Exception as exc:
+        await set_message_status(
+            user_message["message_id"],
+            "failed",
+            error_code=getattr(exc, "code", type(exc).__name__),
+            error_message=str(exc),
+        )
+        raise
+
+
+
 
     return {
         "conversation_id": conversation["_id"],
@@ -152,47 +169,61 @@ async def ask_conversation(
         task_type=task_type,
     )
 
-    if not context["sources_count"]:
-        answer = NO_SOURCE_ANSWER
-    elif task_type == "report":
-        prompt = build_report_prompt(
-            context["rewritten_query"],
-            context["sources"],
-            context["user_type"],
-            context["history"],
-        )
-        answer = await to_thread(
-            generate_answer,
-            prompt,
-            operation="report",
-        )
-    elif task_type == "summary":
-        prompt = build_summary_prompt(
-            context["rewritten_query"],
-            context["sources"],
-            context["user_type"],
-            context["history"],
-        )
-        answer = await to_thread(
-            generate_answer,
-            prompt,
-            operation="summary",
-        )
-    else:
-        answer = await to_thread(
-            generate_answer,
-            context["prompt"],
-            operation="answer",
-        )
+    try:
+        if not context["sources_count"]:
+            answer = NO_SOURCE_ANSWER
+        elif task_type == "report":
+            prompt = build_report_prompt(
+                context["rewritten_query"],
+                context["sources"],
+                context["user_type"],
+                context["history"],
+            )
+            answer = await to_thread(
+                generate_answer,
+                prompt,
+                operation="report",
+            )
+        elif task_type == "summary":
+            prompt = build_summary_prompt(
+                context["rewritten_query"],
+                context["sources"],
+                context["user_type"],
+                context["history"],
+            )
+            answer = await to_thread(
+                generate_answer,
+                prompt,
+                operation="summary",
+            )
+        else:
+            answer = await to_thread(
+                generate_answer,
+                context["prompt"],
+                operation="answer",
+            )
 
-    assistant_message = await create_message(
-        conversation_id,
-        "assistant",
-        answer,
-        task_type=task_type,
-        sources=context["sources"],
-        rewritten_query=context["rewritten_query"],
-        retrieval_queries=context["retrieval_queries"],
+        assistant_message = await create_message(
+            conversation_id,
+            "assistant",
+            answer,
+            task_type=task_type,
+            sources=context["sources"],
+            rewritten_query=context["rewritten_query"],
+            retrieval_queries=context["retrieval_queries"],
+        )
+    except Exception as exc:
+        await set_message_status(
+            context["user_message"]["message_id"],
+            "failed",
+            error_code=getattr(exc, "code", type(exc).__name__),
+            error_message=str(exc),
+        )
+        raise
+
+    await set_message_status(
+        context["user_message"]["message_id"],
+        "completed",
     )
 
     return {

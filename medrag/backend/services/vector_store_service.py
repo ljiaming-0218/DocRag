@@ -52,9 +52,6 @@ def save_chunks(chunks:list[dict]) -> int:
     if not chunks:
         return 0
     
-
- 
-
     document_id = chunks[0]["document_id"]
     user_id = chunks[0]["user_id"]
     for chunk in chunks:
@@ -70,17 +67,21 @@ def save_chunks(chunks:list[dict]) -> int:
     except InternalError as exc:
         _raise_chroma_error("初始化", exc)
 
-
-
     try:
-        collection.delete(where={"$and": [
-                    {"user_id": user_id},
-                    {"document_id": document_id}
-                ]})
+        old_ids = get_document_chunk_ids(
+            collection,
+            user_id,
+            document_id,
+        )
     except InternalError as exc:
-        _raise_chroma_error("删除旧索引", exc)
-                
-    ids =  [f"{chunk['user_id']}_{chunk['document_id']}_page_{chunk['页码']}_chunk_{chunk['块索引']}" for chunk in chunks]  
+        _raise_chroma_error("读取旧索引", exc)
+
+    new_ids = [
+        build_chunk_id(chunk)
+        for chunk in chunks
+    ]
+    new_id_set = set(new_ids)
+
     documents = [chunk["文本块"] for chunk in chunks]
     embeddings = [chunk["embedding"] for chunk in chunks]
     metadatas = [
@@ -96,15 +97,25 @@ def save_chunks(chunks:list[dict]) -> int:
     ]
     try:
         collection.upsert(
-            ids=ids,
+            ids=new_ids,
             documents=documents,
             embeddings=embeddings,
             metadatas=metadatas,
         )
     except InternalError as exc:
         _raise_chroma_error("写入索引", exc)
-    
-    return len(chunks)
+
+    verify_chunk_ids(collection, new_id_set)
+
+    stale_ids = old_ids - new_id_set
+    if stale_ids:
+        try:
+            collection.delete(
+                ids=sorted(stale_ids),
+            )
+        except InternalError as exc:
+            _raise_chroma_error("清理过期索引", exc)
+    return len(new_ids)
 
 
 def query_chunks(user_id: str, document_id: str, query_embedding: list[float], n_results: int = 3) -> dict:
@@ -141,3 +152,50 @@ def query_chunks(user_id: str, document_id: str, query_embedding: list[float], n
     except InternalError as exc:
         _raise_chroma_error("查询", exc)
     return result
+
+
+def build_chunk_id(chunk: dict) -> str:
+    return (
+        f"{chunk['user_id']}_"
+        f"{chunk['document_id']}_"
+        f"page_{chunk['页码']}_"
+        f"chunk_{chunk['块索引']}"
+    )
+
+
+def get_document_chunk_ids(
+    collection,
+    user_id: str,
+    document_id: str,
+) -> set[str]:
+
+    result = collection.get(
+    where={
+            "$and": [
+                {"user_id": user_id},
+                {"document_id": document_id},
+            ]
+        },
+        include=[],
+    )
+
+    return set(result.get("ids", []))
+
+def verify_chunk_ids(
+    collection,
+    expected_ids: set[str],
+) -> None:
+
+    result = collection.get(
+    ids=sorted(expected_ids),
+    include=[],
+)
+
+    actual_ids = set(result.get("ids", []))
+    missing_ids = expected_ids - actual_ids
+
+    if missing_ids:
+        raise RuntimeError(
+            "向量数据库写入校验失败，"
+            f"缺少 {len(missing_ids)} 个文本块"
+        )

@@ -219,6 +219,7 @@ OCR_LANGUAGES=eng+chi_sim
 OCR_DPI=300
 OCR_MIN_TEXT_CHARS=20
 TESSDATA_PREFIX=D:/Anaconda/envs/medrag/share/tessdata
+MAX_UPLOAD_SIZE_MB=20
 ```
 
 API Key 只能放在后端环境变量中。`.env`、上传文件、Chroma 数据和日志均不得提交到 Git。

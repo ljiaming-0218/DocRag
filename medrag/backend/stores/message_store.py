@@ -50,3 +50,26 @@ async def find_recent_messages_by_conversation(conversation_id, limit) -> list[d
         messages.append(message)
     messages.reverse()
     return messages
+
+
+async def update_message_status(
+    message_id: str,
+    status: str,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> bool:
+    database = get_database()
+    message_collection = database["messages"]
+
+    result = await message_collection.update_one(
+        {"_id": message_id},
+        {
+            "$set": {
+                "status": status,
+                "error_code": error_code,
+                "error_message": error_message,
+            }
+        },
+    )
+
+    return result.matched_count == 1
