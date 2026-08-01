@@ -1,10 +1,11 @@
 import logging
 from asyncio import to_thread
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, UploadFile
 
+from api_errors import APIError
 from services.user_service import get_existing_user
 from services.chunk_validation_service import validate_chunk_params
-from services.llm_service import generate_answer
+from services.llm_service import LLMServiceError, generate_answer
 from services.prompt_service import build_rag_prompt
 from services.text_splitter_service import split_pages
 
@@ -22,9 +23,19 @@ router = APIRouter(
 )
 
 
-def raise_service_error(error: Exception) -> None:
-    status_code = 400 if isinstance(error, ValueError) else 500
-    raise HTTPException(status_code=status_code, detail=str(error)) from error
+def raise_pdf_error(error: Exception) -> None:
+    if isinstance(error, ValueError):
+        raise APIError(
+            status_code=400,
+            code="INVALID_PDF_REQUEST",
+            message=str(error),
+        ) from error
+
+    raise APIError(
+        status_code=500,
+        code="PDF_OPERATION_FAILED",
+        message=str(error),
+    ) from error
 
 
 @router.post("/search")
@@ -38,7 +49,7 @@ async def search_pdf(user_id: str, document_id: str, query: str, n_results: int 
             n_results,
         )
     except (ValueError, RuntimeError) as e:
-        raise_service_error(e)
+        raise_pdf_error(e)
 
     return {
         "查询": query,
@@ -64,14 +75,14 @@ async def index_pdfs(
             chunk_overlap=chunk_overlap,
         )
     except (ValueError, RuntimeError) as error:
-        raise_service_error(error)
+        raise_pdf_error(error)
 
 @router.post("/parse")
 async def parse_pdf(user_id: str,file: UploadFile = File(...), ) -> dict:
     try:
         return await build_pdf_pages(user_id, file)
     except (ValueError, RuntimeError) as error:
-        raise_service_error(error)
+        raise_pdf_error(error)
 
 @router.post("/chunks")
 async def parse_pdf_chunks(user_id: str, file: UploadFile = File(...), chunk_size: int = 500, chunk_overlap: int = 50) -> dict:
@@ -80,15 +91,14 @@ async def parse_pdf_chunks(user_id: str, file: UploadFile = File(...), chunk_siz
         user = await get_existing_user(user_id)
         validate_chunk_params(chunk_size, chunk_overlap)
         context = await build_pdf_pages(user_id, file)
+        chunks = await to_thread(
+            split_pages,
+            context["每页内容"],
+            chunk_size,
+            chunk_overlap,
+        )
     except (ValueError, RuntimeError) as error:
-        raise_service_error(error)
-
-    chunks = await to_thread(
-        split_pages,
-        context["每页内容"],
-        chunk_size,
-        chunk_overlap,
-    )
+        raise_pdf_error(error)
 
     return {
         "文件名": context["文件名"],
@@ -108,10 +118,9 @@ async def preview_rag_prompt(user_id: str, document_id: str, query: str, n_resul
             query,
             n_results,
         )
+        prompt = build_rag_prompt(query, retrieved_chunks)
     except (ValueError, RuntimeError) as e:
-        raise_service_error(e)
-
-    prompt = build_rag_prompt(query, retrieved_chunks)
+        raise_pdf_error(e)
 
     return {
         "查询": query,
@@ -128,11 +137,16 @@ async def preview_rag_prompt(user_id: str, document_id: str, query: str, n_resul
 def answer_pdf_question(user_id:str, document_id: str, query: str, n_results: int = 3) -> dict:
     try:
         retrieved_chunks = search_relevant_chunks(user_id, document_id, query, n_results)
+        prompt = build_rag_prompt(query, retrieved_chunks)
+        answer = generate_answer(prompt)
+    except LLMServiceError as error:
+        raise APIError(
+            status_code=error.status_code,
+            code=error.code,
+            message=str(error),
+        ) from error
     except (ValueError, RuntimeError) as e:
-        raise_service_error(e)
-
-    prompt = build_rag_prompt(query, retrieved_chunks)
-    answer = generate_answer(prompt)
+        raise_pdf_error(e)
 
     return {
         "查询": query,

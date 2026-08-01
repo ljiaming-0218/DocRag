@@ -120,7 +120,7 @@ async def list_messages(user_id: str, conversation_id: str) -> list[dict]:
     conversation = await find_conversation_by_id(conversation_id)
 
     if conversation is None:
-        raise ValueError("会话不存在")
+        raise LookupError("会话不存在")
 
     if conversation["user_id"] != user_id:
         raise PermissionError("当前用户无权访问该会话")

@@ -9,7 +9,7 @@ DATASET_DIR = BASE_DIR / "rag_dataset"
 PDF_DIR = DATASET_DIR / "pdfs"
 BASE_URL = "http://127.0.0.1:8000"
 RESULTS_DIR = DATASET_DIR / "results"
-REQUEST_INTERVAL_SECONDS = 5
+REQUEST_INTERVAL_SECONDS = 30
 logger = logging.getLogger(__name__)
 
 def load_json(path: Path) -> list[dict]:

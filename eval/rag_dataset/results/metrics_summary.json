@@ -1,9 +1,9 @@
 {
-  "total_cases": 15,
-  "successful_cases": 15,
-  "failed_cases": 0,
-  "retrieval_evaluable_cases": 12,
-  "execution_success_rate": 1.0,
+  "total_cases": 19,
+  "successful_cases": 16,
+  "failed_cases": 3,
+  "retrieval_evaluable_cases": 13,
+  "execution_success_rate": 0.8421052631578947,
   "case_metrics": [
     {
       "question_id": "RAG-01",
@@ -52,13 +52,18 @@
         8
       ],
       "returned_source_pages": [
-        2,
         1,
-        18
+        2,
+        8,
+        5,
+        3,
+        19,
+        6,
+        17
       ],
-      "hit_rate_at_3": 0.0,
-      "recall_at_3": 0.0,
-      "mrr_at_3": 0.0
+      "hit_rate_at_3": 1.0,
+      "recall_at_3": 0.3333333333333333,
+      "mrr_at_3": 0.3333333333333333
     },
     {
       "question_id": "RAG-04",
@@ -89,10 +94,10 @@
       "returned_source_pages": [
         18,
         4,
-        2
+        12
       ],
       "hit_rate_at_3": 1.0,
-      "recall_at_3": 0.6666666666666666,
+      "recall_at_3": 0.3333333333333333,
       "mrr_at_3": 0.5
     },
     {
@@ -198,7 +203,13 @@
       "returned_source_pages": [
         3,
         19,
-        9
+        9,
+        2,
+        7,
+        16,
+        8,
+        18,
+        25
       ],
       "hit_rate_at_3": 0.0,
       "recall_at_3": 0.0,
@@ -221,85 +232,149 @@
       "mrr_at_3": null
     },
     {
-      "question_id": "RAG-05",
+      "question_id": "RAG-TERM-01",
       "document_key": "rag",
-      "question_type": "follow_up",
+      "question_type": "term",
       "status": "success",
       "retrieval_evaluable": true,
       "gold_source_pages": [
-        3
+        1
       ],
       "returned_source_pages": [
-        4,
-        3,
-        7
+        1,
+        2
       ],
       "hit_rate_at_3": 1.0,
       "recall_at_3": 1.0,
-      "mrr_at_3": 0.5
+      "mrr_at_3": 1.0
     },
     {
-      "question_id": "LORA-05",
-      "document_key": "lora",
-      "question_type": "follow_up",
+      "question_id": "COT-TERM-01",
+      "document_key": "cot",
+      "question_type": "term",
       "status": "success",
       "retrieval_evaluable": true,
       "gold_source_pages": [
-        8
+        1,
+        3
       ],
       "returned_source_pages": [
+        2,
         9,
-        1
+        24
       ],
       "hit_rate_at_3": 0.0,
       "recall_at_3": 0.0,
       "mrr_at_3": 0.0
     },
     {
-      "question_id": "COT-05",
-      "document_key": "cot",
-      "question_type": "follow_up",
+      "question_id": "RAG-SOURCE-01",
+      "document_key": "rag",
+      "question_type": "source_check",
       "status": "success",
       "retrieval_evaluable": true,
       "gold_source_pages": [
-        4
+        3
       ],
       "returned_source_pages": [
-        4,
-        16
+        3
       ],
       "hit_rate_at_3": 1.0,
       "recall_at_3": 1.0,
       "mrr_at_3": 1.0
+    },
+    {
+      "question_id": "LORA-SOURCE-01",
+      "document_key": "lora",
+      "question_type": "source_check",
+      "status": "success",
+      "retrieval_evaluable": true,
+      "gold_source_pages": [
+        1,
+        2,
+        4
+      ],
+      "returned_source_pages": [
+        4,
+        2
+      ],
+      "hit_rate_at_3": 1.0,
+      "recall_at_3": 0.6666666666666666,
+      "mrr_at_3": 1.0
+    },
+    {
+      "question_id": "RAG-05",
+      "document_key": "rag",
+      "question_type": "follow_up",
+      "status": "error",
+      "retrieval_evaluable": false,
+      "gold_source_pages": [
+        3
+      ],
+      "returned_source_pages": [],
+      "hit_rate_at_3": null,
+      "recall_at_3": null,
+      "mrr_at_3": null,
+      "error": "503 Server Error: Service Unavailable for url: http://127.0.0.1:8000/conversations/f98724a7-8d2d-433f-8178-2ca185855e29/ask"
+    },
+    {
+      "question_id": "LORA-05",
+      "document_key": "lora",
+      "question_type": "follow_up",
+      "status": "error",
+      "retrieval_evaluable": false,
+      "gold_source_pages": [
+        8
+      ],
+      "returned_source_pages": [],
+      "hit_rate_at_3": null,
+      "recall_at_3": null,
+      "mrr_at_3": null,
+      "error": "503 Server Error: Service Unavailable for url: http://127.0.0.1:8000/conversations/da1d6349-39b0-4d1f-a101-4e84a921d29f/ask"
+    },
+    {
+      "question_id": "COT-05",
+      "document_key": "cot",
+      "question_type": "follow_up",
+      "status": "error",
+      "retrieval_evaluable": false,
+      "gold_source_pages": [
+        4
+      ],
+      "returned_source_pages": [],
+      "hit_rate_at_3": null,
+      "recall_at_3": null,
+      "mrr_at_3": null,
+      "error": "503 Server Error: Service Unavailable for url: http://127.0.0.1:8000/conversations/4c5006de-93fe-4dee-9135-800e20ddf319/ask"
     }
   ],
   "by_document": {
     "rag": {
-      "total_cases": 5,
-      "successful_cases": 5,
-      "retrieval_evaluable_cases": 4,
-      "execution_success_rate": 1.0,
-      "hit_rate_at_3": 0.75,
-      "recall_at_3": 0.75,
-      "mrr_at_3": 0.625
+      "total_cases": 7,
+      "successful_cases": 6,
+      "retrieval_evaluable_cases": 5,
+      "execution_success_rate": 0.8571428571428571,
+      "hit_rate_at_3": 1.0,
+      "recall_at_3": 0.8666666666666668,
+      "mrr_at_3": 0.8666666666666668
     },
     "lora": {
-      "total_cases": 5,
+      "total_cases": 6,
       "successful_cases": 5,
       "retrieval_evaluable_cases": 4,
-      "execution_success_rate": 1.0,
-      "hit_rate_at_3": 0.5,
-      "recall_at_3": 0.41666666666666663,
-      "mrr_at_3": 0.375
+      "execution_success_rate": 0.8333333333333334,
+      "hit_rate_at_3": 0.75,
+      "recall_at_3": 0.5,
+      "mrr_at_3": 0.625
     },
     "cot": {
-      "total_cases": 5,
+      "total_cases": 6,
       "successful_cases": 5,
       "retrieval_evaluable_cases": 4,
-      "execution_success_rate": 1.0,
-      "hit_rate_at_3": 0.75,
-      "recall_at_3": 0.625,
-      "mrr_at_3": 0.625
+      "execution_success_rate": 0.8333333333333334,
+      "hit_rate_at_3": 0.5,
+      "recall_at_3": 0.375,
+      "mrr_at_3": 0.375
     }
   },
   "by_question_type": {
@@ -326,9 +401,9 @@
       "successful_cases": 2,
       "retrieval_evaluable_cases": 2,
       "execution_success_rate": 1.0,
-      "hit_rate_at_3": 0.0,
-      "recall_at_3": 0.0,
-      "mrr_at_3": 0.0
+      "hit_rate_at_3": 0.5,
+      "recall_at_3": 0.16666666666666666,
+      "mrr_at_3": 0.16666666666666666
     },
     "unanswerable": {
       "total_cases": 3,
@@ -340,25 +415,34 @@
       "mrr_at_3": null
     },
     "term": {
+      "total_cases": 4,
+      "successful_cases": 4,
+      "retrieval_evaluable_cases": 4,
+      "execution_success_rate": 1.0,
+      "hit_rate_at_3": 0.75,
+      "recall_at_3": 0.5833333333333333,
+      "mrr_at_3": 0.5
+    },
+    "source_check": {
       "total_cases": 2,
       "successful_cases": 2,
       "retrieval_evaluable_cases": 2,
       "execution_success_rate": 1.0,
       "hit_rate_at_3": 1.0,
       "recall_at_3": 0.8333333333333333,
-      "mrr_at_3": 0.5
+      "mrr_at_3": 1.0
     },
     "follow_up": {
       "total_cases": 3,
-      "successful_cases": 3,
-      "retrieval_evaluable_cases": 3,
-      "execution_success_rate": 1.0,
-      "hit_rate_at_3": 0.6666666666666666,
-      "recall_at_3": 0.6666666666666666,
-      "mrr_at_3": 0.5
+      "successful_cases": 0,
+      "retrieval_evaluable_cases": 0,
+      "execution_success_rate": 0.0,
+      "hit_rate_at_3": null,
+      "recall_at_3": null,
+      "mrr_at_3": null
     }
   },
-  "hit_rate_at_3": 0.6666666666666666,
-  "recall_at_3": 0.5972222222222222,
-  "mrr_at_3": 0.5416666666666666
+  "hit_rate_at_3": 0.7692307692307693,
+  "recall_at_3": 0.6025641025641026,
+  "mrr_at_3": 0.6410256410256411
 }

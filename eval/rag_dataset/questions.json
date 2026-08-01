@@ -280,5 +280,72 @@
     "source_pages": [4],
     "expected_answerable": true,
     "expected_task_type": "qa"
+  },
+  {
+    "question_id": "RAG-TERM-01",
+    "document_key": "rag",
+    "question_type": "term",
+    "question": "请提取并解释论文中的两个核心术语：参数化记忆和非参数化记忆。",
+    "history": [],
+    "expected_rewritten_query": "请解释 RAG 论文中的参数化记忆和非参数化记忆。",
+    "gold_answer": "参数化记忆是预训练的序列到序列生成模型；非参数化记忆是由神经检索器访问的 Wikipedia 稠密向量索引。",
+    "gold_answer_points": [
+      "参数化记忆是预训练 seq2seq 生成模型",
+      "非参数化记忆是 Wikipedia 的稠密向量索引",
+      "非参数化记忆由预训练神经检索器访问"
+    ],
+    "source_pages": [1],
+    "expected_answerable": true,
+    "expected_task_type": "term"
+  },
+  {
+    "question_id": "COT-TERM-01",
+    "document_key": "cot",
+    "question_type": "term",
+    "question": "请解释论文中的术语 Chain-of-Thought Prompting 及其作用。",
+    "history": [],
+    "expected_rewritten_query": "请解释 Chain-of-Thought Prompting 的定义及其在复杂推理中的作用。",
+    "gold_answer": "Chain-of-Thought Prompting 在 few-shot 提示中提供包含中间推理步骤的示例，引导模型生成推理链并分解复杂问题。",
+    "gold_answer_points": [
+      "在提示示例中提供中间推理步骤",
+      "引导模型生成推理链",
+      "将多步问题分解为中间步骤"
+    ],
+    "source_pages": [1, 3],
+    "expected_answerable": true,
+    "expected_task_type": "term"
+  },
+  {
+    "question_id": "RAG-SOURCE-01",
+    "document_key": "rag",
+    "question_type": "source_check",
+    "question": "请核查以下说法是否有论文证据：RAG-Token 允许生成每个 token 时使用不同的检索文档。",
+    "history": [],
+    "expected_rewritten_query": "RAG-Token 是否允许生成每个 token 时使用不同的检索文档？",
+    "gold_answer": "支持。论文说明 RAG-Token 可以在生成每个目标 token 时基于不同的检索文档。",
+    "gold_answer_points": [
+      "核查结果为支持",
+      "RAG-Token 可为不同目标 token 使用不同文档"
+    ],
+    "source_pages": [3],
+    "expected_answerable": true,
+    "expected_task_type": "source_check"
+  },
+  {
+    "question_id": "LORA-SOURCE-01",
+    "document_key": "lora",
+    "question_type": "source_check",
+    "question": "请核查以下说法是否有论文依据：LoRA 训练时冻结预训练权重，只更新低秩矩阵。",
+    "history": [],
+    "expected_rewritten_query": "LoRA 训练时是否冻结预训练权重并只更新低秩矩阵？",
+    "gold_answer": "支持。论文将权重更新表示为低秩矩阵 A 和 B 的乘积，训练时冻结原始预训练权重 W0，只更新 A 和 B。",
+    "gold_answer_points": [
+      "核查结果为支持",
+      "冻结原始预训练权重 W0",
+      "训练低秩矩阵 A 和 B"
+    ],
+    "source_pages": [1, 2, 4],
+    "expected_answerable": true,
+    "expected_task_type": "source_check"
   }
 ]

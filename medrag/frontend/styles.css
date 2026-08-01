@@ -322,12 +322,14 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.document-list,
 .conversation-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+.document-item,
 .conversation-item {
   width: 100%;
   border: 1px solid transparent;
@@ -338,18 +340,23 @@ button:disabled {
   color: #f9fafb;
 }
 
+.document-item:hover,
+.document-item.active,
 .conversation-item:hover,
 .conversation-item.active {
   background: var(--sidebar-hover);
   border-color: rgba(255, 255, 255, 0.1);
 }
 
+.document-title,
+.document-meta,
 .conversation-title,
 .conversation-meta,
 .conversation-doc {
   display: block;
 }
 
+.document-title,
 .conversation-title {
   font-size: 13px;
   font-weight: 700;
@@ -358,6 +365,7 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+.document-meta,
 .conversation-meta,
 .conversation-doc {
   margin-top: 4px;
@@ -659,18 +667,23 @@ button:disabled {
 
 .composer-meta {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px;
-  gap: 10px;
-  margin-bottom: 10px;
+  grid-template-columns: minmax(0, 1fr) 150px 70px;
+  gap: 8px;
 }
 
 .auth-card input,
 .auth-card select,
 .composer input,
+.composer select,
 .composer textarea {
   background: #fff;
   color: var(--text);
   border-color: var(--border);
+}
+
+#answerUserType option {
+  background: #fff;
+  color: #111827;
 }
 
 .auth-card input::placeholder,

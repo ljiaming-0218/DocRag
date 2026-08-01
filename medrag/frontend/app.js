@@ -3,6 +3,7 @@ const USER_STORAGE_KEY = "docrag.currentUser";
 let currentUser = null;
 let currentDocumentId = "";
 let currentConversationId = "";
+let documents = [];
 let conversations = [];
 
 function $(id) {
@@ -59,7 +60,15 @@ async function parseResponse(response) {
   }
 
   if (!response.ok) {
-    const message = data.detail || data.message || `请求失败，状态码：${response.status}`;
+    const detailMessage =
+      typeof data.detail === "object"
+        ? data.detail?.message
+        : data.detail;
+
+    const message =
+      data.message ||
+      detailMessage ||
+      `请求失败，状态码：${response.status}`;
     throw new Error(message);
   }
 
@@ -116,6 +125,7 @@ function renderActiveUser() {
   $("activeUserName").textContent = currentUser.username;
   $("activeUserType").textContent = currentUser.default_user_type || "general";
   $("activeUserAvatar").textContent = currentUser.username.slice(0, 1).toUpperCase();
+  $("answerUserType").value = currentUser.default_user_type || "general";
 }
 
 async function createOrLoginUser(username, defaultUserType) {
@@ -151,6 +161,7 @@ async function handleAuthSubmit(event) {
     const user = await createOrLoginUser(username, defaultUserType);
     saveCurrentUser(user);
     showAppView();
+    await loadDocuments();
     await loadConversations();
   } catch (error) {
     setStatus("authStatus", error.message, "error");
@@ -164,13 +175,86 @@ function logout() {
   currentUser = null;
   currentDocumentId = "";
   currentConversationId = "";
+  documents = [];
   conversations = [];
   $("answerResult").innerHTML = "";
+  $("documentList").innerHTML = "";
   $("conversationList").innerHTML = "";
   $("answerConversationId").value = "";
   $("searchDocumentId").value = "";
   $("newDocumentConversationButton").classList.add("hidden");
   showAuthView();
+}
+
+async function loadDocuments() {
+  const user = requireUser();
+  clearStatus("documentStatus");
+
+  try {
+    const url = buildUrl(
+      `/users/${encodeURIComponent(user.user_id)}/documents`,
+      { limit: 50 }
+    );
+    const response = await fetch(url);
+    const data = await parseResponse(response);
+    documents = Array.isArray(data) ? data : [];
+    renderDocumentList();
+  } catch (error) {
+    documents = [];
+    renderDocumentList();
+    setStatus("documentStatus", error.message, "error");
+  }
+}
+
+function renderDocumentList() {
+  const target = $("documentList");
+
+  if (!documents.length) {
+    target.innerHTML = '<p class="empty-list">还没有历史文档。</p>';
+    return;
+  }
+
+  target.innerHTML = documents
+    .map((document) => {
+      const activeClass =
+        document.document_id === currentDocumentId
+          ? " active"
+          : "";
+      return `
+        <button
+          class="document-item${activeClass}"
+          type="button"
+          data-document-id="${escapeHtml(document.document_id)}"
+        >
+          <span class="document-title">${escapeHtml(document.filename || "未命名文档")}</span>
+          <span class="document-meta">
+            ${escapeHtml(document.language || "unknown")}
+            · ${escapeHtml(formatDate(document.updated_at))}
+          </span>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+async function selectDocument(documentId) {
+  const document = documents.find(
+    (item) => item.document_id === documentId
+  );
+
+  currentDocumentId = documentId;
+  currentConversationId = "";
+  $("searchDocumentId").value = documentId;
+  $("answerConversationId").value = "";
+  $("answerResult").innerHTML = "";
+  $("answerQuery").value = "";
+  $("newDocumentConversationButton").classList.remove("hidden");
+  $("emptyState").classList.remove("hidden");
+  renderDocumentList();
+  updateContextText({
+    title: document?.filename || "当前文档",
+  });
+  await loadConversations(documentId);
 }
 
 async function createConversation(userId, documentId, title) {
@@ -208,6 +292,8 @@ async function loadConversations(documentId = null) {
     conversations = await parseResponse(response);
     renderConversationList();
   } catch (error) {
+    conversations = [];
+    renderConversationList();
     setStatus("conversationStatus", error.message, "error");
   }
 }
@@ -237,13 +323,17 @@ function renderConversationList() {
 async function selectConversation(conversationId) {
   const user = requireUser();
   const conversation = conversations.find((item) => item.conversation_id === conversationId);
-
+  $("answerUserType").value =
+  conversation?.user_type ||
+  currentUser.default_user_type ||
+  "general";
   currentConversationId = conversationId;
   currentDocumentId = conversation?.document_id || "";
   $("newDocumentConversationButton").classList.remove("hidden");
   $("answerConversationId").value = currentConversationId;
   $("searchDocumentId").value = currentDocumentId;
   updateContextText(conversation);
+  renderDocumentList();
   renderConversationList();
 
   try {
@@ -298,6 +388,8 @@ async function startBlankConversation() {
   $("searchResult").innerHTML = "";
   $("answerQuery").value = "";
   $("searchQuery").value = "";
+  $("answerUserType").value =
+    currentUser?.default_user_type || "general";
 
   clearStatus("indexStatus");
   clearStatus("searchStatus");
@@ -305,6 +397,7 @@ async function startBlankConversation() {
   $("newDocumentConversationButton").classList.add("hidden");
   $("emptyState").classList.remove("hidden");
   updateContextText(null);
+  renderDocumentList();
   await loadConversations();
 }
 
@@ -320,7 +413,10 @@ async function startNewConversation() {
     const file = $("pdfFile").files[0];
     const title = file ? file.name.replace(/\.pdf$/i, "") : "新会话";
     const conversation = await createConversation(user.user_id, currentDocumentId, title);
-
+    $("answerUserType").value =
+      conversation.user_type ||
+      currentUser.default_user_type ||
+      "general";
     currentConversationId = conversation.conversation_id;
     $("answerConversationId").value = currentConversationId;
     $("answerResult").innerHTML = "";
@@ -446,6 +542,7 @@ async function indexPdf() {
     $("newDocumentConversationButton").classList.remove("hidden");
 
     renderMeta("indexResult", data);
+    await loadDocuments();
 
     if (data.existing_document) {
       currentConversationId = "";
@@ -458,6 +555,7 @@ async function indexPdf() {
                     : [];
 
       renderConversationList();
+      renderDocumentList();
       updateContextText(null);
       return;
     }
@@ -465,6 +563,7 @@ async function indexPdf() {
     const title = fileInput.files[0].name.replace(/\.pdf$/i, "");
     const conversation = await createConversation(user.user_id, currentDocumentId, title);
     currentConversationId = conversation.conversation_id;
+    $("answerUserType").value = conversation.user_type || currentUser.default_user_type || "general";
     $("answerConversationId").value = currentConversationId;
     $("answerResult").innerHTML = "";
     $("emptyState").classList.remove("hidden");
@@ -564,6 +663,7 @@ async function answerQuestion() {
   const query = $("answerQuery").value.trim();
   const topK = Number($("answerTopK").value);
   const button = $("answerButton");
+  const userType = $("answerUserType").value;
 
   if (!conversationId || !query) {
     setStatus("answerStatus", "请先建立或选择会话，并输入问题。", "error");
@@ -585,6 +685,7 @@ async function answerQuestion() {
         query,
         history_limit: 6,
         n_results: topK,
+        user_type: userType,
       }),
     });
     const data = await parseResponse(response);
@@ -616,6 +717,11 @@ function bindEvents() {
     if (!item) return;
     selectConversation(item.dataset.conversationId);
   });
+  $("documentList").addEventListener("click", (event) => {
+    const item = event.target.closest("[data-document-id]");
+    if (!item) return;
+    selectDocument(item.dataset.documentId);
+  });
   $("answerQuery").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -635,6 +741,7 @@ async function initApp() {
 
   currentUser = savedUser;
   showAppView();
+  await loadDocuments();
   await loadConversations();
 }
 

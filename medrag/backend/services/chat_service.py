@@ -11,7 +11,9 @@ from services.message_service import (
 from services.prompt_service import (
     build_rag_prompt,
     build_report_prompt,
+    build_source_check_prompt,
     build_summary_prompt,
+    build_term_prompt,
 )
 from services.query_rewrite_service import rewrite_query
 from services.search_service import (
@@ -51,9 +53,9 @@ async def prepare_ask_context(
 
     conversation = await find_conversation_by_id(conversation_id)
     if conversation is None:
-        raise ValueError("会话不存在")
+        raise LookupError("会话不存在")
     if conversation["user_id"] != user_id:
-        raise ValueError("当前用户无权访问该会话")
+        raise PermissionError("当前用户无权访问该会话")
 
     document = await get_existing_document_for_user(
         user_id,
@@ -195,6 +197,30 @@ async def ask_conversation(
                 generate_answer,
                 prompt,
                 operation="summary",
+            )
+        elif task_type == "term":
+            prompt = build_term_prompt(
+                context["rewritten_query"],
+                context["sources"],
+                context["user_type"],
+                context["history"],
+            )
+            answer = await to_thread(
+                generate_answer,
+                prompt,
+                operation="term",
+            )
+        elif task_type == "source_check":
+            prompt = build_source_check_prompt(
+                context["rewritten_query"],
+                context["sources"],
+                context["user_type"],
+                context["history"],
+            )
+            answer = await to_thread(
+                generate_answer,
+                prompt,
+                operation="source_check",
             )
         else:
             answer = await to_thread(

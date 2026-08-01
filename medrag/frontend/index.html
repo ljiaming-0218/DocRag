@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
     <title>DocRAG Agent | PDF 文献阅读助手</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -89,6 +90,15 @@
 
           <section class="side-panel">
             <div class="side-title">
+              <strong>历史文档</strong>
+              <span>选择文档后查看关联会话</span>
+            </div>
+            <div id="documentList" class="document-list"></div>
+            <div id="documentStatus" class="status"></div>
+          </section>
+
+          <section class="side-panel">
+            <div class="side-title">
               <strong>历史会话</strong>
               <span>选择一个会话继续提问</span>
             </div>
@@ -165,6 +175,14 @@
           <div class="composer">
             <div class="composer-meta">
               <input id="answerConversationId" placeholder="conversation_id：上传或选择会话后自动填入" readonly />
+              <select id="answerUserType" title="当前回答模式">
+                <option value="general">普通用户</option>
+                <option value="undergraduate">本科生</option>
+                <option value="graduate_student">研究生</option>
+                <option value="researcher">科研人员</option>
+                <option value="developer">工程开发者</option>
+                <option value="teacher">教师</option>
+              </select>
               <input id="answerTopK" type="number" value="3" min="1" title="top-k" />
             </div>
 

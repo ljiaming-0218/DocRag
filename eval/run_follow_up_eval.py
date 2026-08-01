@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 
 import requests
@@ -18,6 +19,9 @@ from run_eval import (
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     documents = load_json(DATASET_DIR / "documents.json")
     questions = load_json(DATASET_DIR / "questions.json")
     follow_up_questions = [

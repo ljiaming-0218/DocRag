@@ -1,6 +1,12 @@
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from api_errors import (
+    APIError,
+    api_error_handler,
+    request_validation_error_handler,
+)
 
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
@@ -36,7 +42,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
+app.add_exception_handler(
+    APIError,
+    api_error_handler,
+)
+app.add_exception_handler(
+    RequestValidationError,
+    request_validation_error_handler,
+)
 
 app.add_middleware(
     CORSMiddleware,

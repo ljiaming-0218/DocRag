@@ -22,13 +22,20 @@ async def insert_document(document) -> None:
     document_collection = database["documents"]
     await document_collection.insert_one(document)
 
-async def find_documents_by_user(user_id) -> list:
+async def find_documents_by_user(
+    user_id: str,
+    limit: int = 50,
+) -> list[dict]:
     database = get_database()
-    document_collection = database["documents"]
+    collection = database["documents"]
 
-    cursor = document_collection.find({"user_id": user_id})
+    cursor = (
+        collection.find({"user_id": user_id})
+        .sort("updated_at", -1)
+        .limit(limit)
+    )
+
     documents = []
-
     async for document in cursor:
         documents.append(document)
 
@@ -42,6 +49,13 @@ async def create_document_indexes() -> None:
         [("user_id", 1), ("document_hash", 1)],
         name="user_id_document_hash_unique_idx",
         unique=True
+    )
+    await document_collection.create_index(
+        [
+            ("user_id", 1),
+            ("updated_at", -1),
+        ],
+        name="user_id_updated_at_idx",
     )
 
 async def update_document_language(

@@ -67,7 +67,38 @@ def build_summary_prompt(
         user_type=user_type,
         user_type_instruction=build_user_type_instruction(user_type),
     )
-    
+
+
+def build_term_prompt(
+    query: str,
+    sources: list[dict],
+    user_type: str,
+    history: list[dict],
+) -> str:
+    prompt_template = load_prompt_template("term_prompt.txt")
+    return prompt_template.format(
+        history=build_history_context(history or []),
+        query=query,
+        context=build_context(sources),
+        user_type=user_type,
+        user_type_instruction=build_user_type_instruction(user_type),
+    )
+
+
+def build_source_check_prompt(
+    query: str,
+    sources: list[dict],
+    user_type: str,
+    history: list[dict],
+) -> str:
+    prompt_template = load_prompt_template("source_check_prompt.txt")
+    return prompt_template.format(
+        history=build_history_context(history or []),
+        query=query,
+        context=build_context(sources),
+        user_type=user_type,
+        user_type_instruction=build_user_type_instruction(user_type),
+    )
 
 
 def build_context(retrieved_chunks: list[dict]) -> str:

@@ -8,7 +8,20 @@ import fitz
 
 BASE_DIR = Path(__file__).resolve().parent
 PDF_DIR = BASE_DIR / "pdfs"
-ALLOWED_TYPES = {"fact", "summary", "unanswerable", "term", "comparison", "follow_up"}
+ALLOWED_TYPES = {
+    "fact",
+    "summary",
+    "unanswerable",
+    "term",
+    "comparison",
+    "follow_up",
+    "source_check",
+}
+EXPECTED_QUESTION_COUNTS = {
+    "rag": 7,
+    "lora": 6,
+    "cot": 6,
+}
 
 
 def load_json(filename: str) -> list[dict]:
@@ -23,8 +36,8 @@ def main() -> None:
     document_map = {item["document_key"]: item for item in documents}
     if len(document_map) != 3:
         errors.append("documents.json 必须包含 3 篇不同文档")
-    if len(questions) != 15:
-        errors.append("questions.json 必须包含 15 道题")
+    if len(questions) != 19:
+        errors.append("questions.json 必须包含 19 道题")
 
     for document in documents:
         pdf_path = PDF_DIR / document["filename"]
@@ -47,9 +60,11 @@ def main() -> None:
         errors.append("question_id 必须唯一")
 
     counts = Counter(item["document_key"] for item in questions)
-    for document_key in document_map:
-        if counts[document_key] != 5:
-            errors.append(f"{document_key} 必须恰好包含 5 道题")
+    for document_key, expected_count in EXPECTED_QUESTION_COUNTS.items():
+        if counts[document_key] != expected_count:
+            errors.append(
+                f"{document_key} 必须包含 {expected_count} 道题"
+            )
 
     for question in questions:
         question_id = question["question_id"]
@@ -79,7 +94,7 @@ def main() -> None:
             print(f"- {error}")
         raise SystemExit(1)
 
-    print("评估集校验通过：3 篇 PDF，15 道问题，每篇 5 道。")
+    print("评估集校验通过：3 篇 PDF，19 道问题。")
     print("题型统计：", dict(Counter(item["question_type"] for item in questions)))
 
 

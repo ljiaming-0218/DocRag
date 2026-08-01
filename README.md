@@ -58,6 +58,8 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 
 - 包含“总结、摘要、概括、归纳”时进入 `summary`。
 - 包含“阅读报告、分析这篇文献”时进入 `report`。
+- 包含“术语、关键词、关键概念”时进入 `term`。
+- 包含“依据、出处、引用、来源、证据”时进入 `source_check`。
 - 其他问题进入普通 `qa`。
 
 总结任务使用 Summary Multi-Query：根据初始证据生成多个检索子查询，分别召回、重排、去重并控制同页片段数量，再组装总结上下文。增强流程失败时回退原查询，避免破坏基础问答链路。
@@ -75,12 +77,33 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
   → 创建或恢复文档会话
   → 读取最近历史
   → Query Rewrite
-  → Agent Router 识别 qa / summary / report
+  → Agent Router 识别 qa / summary / report / term / source_check
   → 向量召回 + CrossEncoder Rerank
   → 组装 Prompt
   → 调用 LLM
   → 保存 answer、sources 和检索调试信息
   → 前端展示回答与可折叠引用
+```
+
+```mermaid
+flowchart LR
+    UI[Web 前端] --> API[FastAPI Router]
+    API --> INGEST[PDF 索引服务]
+    INGEST --> PARSE[PyMuPDF / OCR]
+    PARSE --> SPLIT[文本切分]
+    SPLIT --> EMBED[Embedding]
+    EMBED --> CHROMA[(Chroma)]
+
+    API --> CHAT[会话问答服务]
+    CHAT --> MEMORY[(MongoDB)]
+    CHAT --> REWRITE[Query Rewrite]
+    REWRITE --> AGENT[Agent Router]
+    AGENT --> RETRIEVE[向量召回 + Rerank]
+    CHROMA --> RETRIEVE
+    RETRIEVE --> PROMPT[任务 Prompt]
+    PROMPT --> LLM[OpenRouter LLM]
+    LLM --> CHAT
+    CHAT --> UI
 ```
 
 更完整的模块说明见：
@@ -102,7 +125,7 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 | 业务数据 | MongoDB、PyMongo Async API |
 | 大模型 | OpenRouter / OpenAI-compatible API |
 | 前端 | HTML、CSS、JavaScript |
-| 测试与评估 | pytest、pytest-asyncio、自建 RAG 小型评估集 |
+| 测试与评估 | pytest、pytest-asyncio、Playwright、自建 RAG 小型评估集 |
 | 部署 | Docker、Hugging Face Space |
 
 ## 目录结构
@@ -290,7 +313,7 @@ D:\Anaconda\envs\medrag\python.exe -m pytest -q
 
 ## RAG 评估
 
-评估集包含 3 篇公开论文、15 道问题，覆盖事实、术语、对比、总结、无答案和多轮追问。
+评估集包含 3 篇公开论文、19 道问题，覆盖事实、术语、对比、总结、无答案、多轮追问和证据核查。
 
 ```cmd
 cd /d D:\MedRag
@@ -304,12 +327,30 @@ python eval\calculate_metrics.py
 
 | 指标 | 数值 |
 | --- | ---: |
-| Execution Success Rate | 1.0000 |
-| HitRate@3 | 0.6667 |
-| Recall@3 | 0.5972 |
-| MRR@3 | 0.5417 |
+| Execution Success Rate | 0.8421 |
+| HitRate@3 | 0.7692 |
+| Recall@3 | 0.6026 |
+| MRR@3 | 0.6410 |
 
-该结果说明接口链路能够完成，但总结问题、多证据覆盖和部分 LoRA/追问题仍有改进空间。结果文件早于最近的 Summary Multi-Query 修改，冻结新版本前必须重新执行评估，不能把旧指标描述为最新优化效果。
+本轮 16 道非追问题全部执行成功；3 道 follow-up 在连续评估后被免费模型供应商限流并返回 503，因此执行成功率下降不能直接归因于 Query Rewrite。检索 bad case 主要集中在 `LORA-03`、`COT-03`、`COT-TERM-01`，`LORA-01` 只覆盖部分 gold evidence。新增 `source_check` 两题的 HitRate@3 为 1.0、Recall@3 为 0.8333，但样本数很小，只能作为回归基线。
+
+## 我遇到的问题与修复
+
+### CORS 导致前端 `Failed to fetch`
+
+前后端分别运行在不同端口时属于不同 Origin，浏览器会执行同源策略。后端通过 FastAPI `CORSMiddleware` 显式允许开发前端来源；正式部署时由 FastAPI 同源托管静态前端，减少跨域配置差异。
+
+### Chroma HNSW 索引损坏
+
+旧 Chroma 持久化目录曾在删除文档向量时出现 `Error loading hnsw index`。处理时保留损坏目录用于排查，创建新的项目级持久化目录并重新索引；配置统一使用 `CHROMA_DIR`，避免数据散落到系统盘。重复索引前按 `user_id + document_id` 清理旧 chunk，降低残留数据污染检索的风险。
+
+### Query Rewrite 偏离或失败
+
+追问中的“它、该方法、另一个变体”直接检索容易丢失主题。系统读取最近几轮历史补全指代，并保存 `original_query`、`rewritten_query` 和 `retrieval_queries` 便于复现。改写失败时回退原问题，避免增强模块阻断主链路；原问题仍用于前端展示和消息存储。
+
+### Summary 单次召回覆盖不足
+
+总结问题的证据通常分散在多个页面，单次 top-k 容易只命中一个局部。Summary Multi-Query 先生成多个检索子问题，再分别召回、Rerank、去重并限制同页 chunk 数量，从而扩大证据覆盖。优化效果必须通过固定评估集比较 HitRate、Recall、MRR、引用准确性和延迟，不能只看回答是否流畅。
 
 ## 工程边界
 
