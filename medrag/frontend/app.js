@@ -563,7 +563,10 @@ async function indexPdf() {
     const title = fileInput.files[0].name.replace(/\.pdf$/i, "");
     const conversation = await createConversation(user.user_id, currentDocumentId, title);
     currentConversationId = conversation.conversation_id;
-    $("answerUserType").value = conversation.user_type || currentUser.default_user_type || "general";
+    $("answerUserType").value =
+      conversation.user_type ||
+      user.default_user_type ||
+      "general";
     $("answerConversationId").value = currentConversationId;
     $("answerResult").innerHTML = "";
     $("emptyState").classList.remove("hidden");

@@ -76,7 +76,7 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 - 包含“依据、出处、引用、来源、证据”时进入 `source_check`。
 - 其他问题进入普通 `qa`。
 
-总结任务使用 Summary Multi-Query：根据初始证据生成多个检索子查询，分别召回、重排、去重并控制同页片段数量，再组装总结上下文。增强流程失败时回退原查询，避免破坏基础问答链路。
+总结任务使用 Summary Multi-Query：根据初始证据生成多个检索子查询，分别召回、重排、去重并控制同页片段数量，再组装总结上下文。`term` 和 `source_check` 使用独立 Prompt，要求回答必须回到 sources。增强流程失败时回退原查询，避免破坏基础问答链路。
 
 ## 系统流程
 
@@ -322,6 +322,8 @@ D:\Anaconda\envs\medrag\python.exe -m pytest -q
 - 同一用户和相同 `document_hash` 复用已有文档。
 - Query Rewrite 调用失败时回退原问题。
 - assistant 消息保存 sources。
+- 前端 Playwright smoke 覆盖创建用户、上传索引、重复上传、历史会话、追问和 sources 展示。
+- 前端静态回归检查 `indexPdf()` 不会在创建会话前读取 `conversation.user_type`。
 
 这些是 Mock 单元测试，不替代 MongoDB、Chroma、真实模型和完整接口的集成测试。
 
