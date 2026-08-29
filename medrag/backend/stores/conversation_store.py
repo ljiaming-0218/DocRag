@@ -22,6 +22,7 @@ async def find_conversations(
     user_id: str,
     document_id: str | None = None,
     limit: int = 50,
+    kb_id: str | None = None,
 ) -> list[dict]:
     database = get_database()
     conversation_collection = database["conversations"]
@@ -30,6 +31,8 @@ async def find_conversations(
 
     if document_id:
         query["document_id"] = document_id
+    if kb_id:
+        query["kb_id"] = kb_id
 
     cursor = conversation_collection.find(query)
     
@@ -55,6 +58,14 @@ async def create_conversation_indexes() -> None:
             ("updated_at", -1),
         ],
         name="user_document_updated_at_idx",
+    )
+    await conversation_collection.create_index(
+        [
+            ("user_id", 1),
+            ("kb_id", 1),
+            ("updated_at", -1),
+        ],
+        name="user_kb_updated_at_idx",
     )
     
 

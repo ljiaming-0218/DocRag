@@ -12,7 +12,9 @@ router = APIRouter(
 
 class CreateConversationRequest(BaseModel):
     user_id: str
-    document_id: str
+    document_id: str | None = None
+    kb_id: str | None = None
+    selected_document_ids: list[str] | None = None
     title: str = "新会话"
 
 class AskConversationRequest(BaseModel):
@@ -25,7 +27,13 @@ class AskConversationRequest(BaseModel):
 @router.post("", status_code=201)
 async def create_conversation_endpoint(request: CreateConversationRequest,) -> dict:
     try:
-        conversation = await create_conversation(request.user_id, request.document_id, request.title)
+        conversation = await create_conversation(
+            user_id=request.user_id,
+            document_id=request.document_id,
+            title=request.title,
+            kb_id=request.kb_id,
+            selected_document_ids=request.selected_document_ids,
+        )
     except ValueError as error:
         raise APIError(
             status_code=400,
@@ -36,12 +44,18 @@ async def create_conversation_endpoint(request: CreateConversationRequest,) -> d
     return conversation
 
 @router.get("")
-async def list_conversations_endpoint(user_id: str = Query(...), document_id: str | None = Query(default=None), limit: int = Query(default=50, ge=1, le=100),) -> list[dict]:
+async def list_conversations_endpoint(
+    user_id: str = Query(...),
+    document_id: str | None = Query(default=None),
+    kb_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> list[dict]:
     try:
         return await list_conversations(
             user_id=user_id,
             document_id=document_id,
             limit=limit,
+            kb_id=kb_id,
         )
     except ValueError as error:
         raise APIError(

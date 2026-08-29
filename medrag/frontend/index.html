@@ -58,12 +58,46 @@
         <div class="sidebar-scroll">
           <section class="side-panel">
             <div class="side-title">
+              <strong>知识库</strong>
+              <span>组织多篇文档并在同一会话中联合检索</span>
+            </div>
+
+            <label for="knowledgeBaseName">新建知识库</label>
+            <input id="knowledgeBaseName" maxlength="100" placeholder="例如：RAG 论文集" />
+            <textarea id="knowledgeBaseDescription" maxlength="500" placeholder="可选：说明知识库用途"></textarea>
+            <button id="createKnowledgeBaseButton" class="ghost-button" type="button">创建知识库</button>
+            <div id="knowledgeBaseStatus" class="status"></div>
+            <div id="knowledgeBaseList" class="knowledge-base-list"></div>
+          </section>
+
+          <section class="side-panel">
+            <div class="side-title">
               <strong>文档索引</strong>
               <span>上传 PDF 后建立知识库</span>
             </div>
 
             <label for="pdfFile">选择 PDF 文件</label>
-            <input id="pdfFile" type="file" accept="application/pdf,.pdf" />
+            <label class="upload-picker" for="pdfFile">
+              <input
+                id="pdfFile"
+                type="file"
+                accept="application/pdf,.pdf"
+                multiple
+              />
+              <span class="upload-picker-icon">PDF</span>
+              <span class="upload-picker-copy">
+                <strong>选择或拖入多个 PDF</strong>
+                <small>文件将按顺序索引，单个失败不会中断其他文件</small>
+              </span>
+            </label>
+            <div id="selectedFileList" class="selected-file-list">
+              <span class="empty-list">尚未选择文件</span>
+            </div>
+
+            <label for="uploadKnowledgeBaseSelect">加入知识库（可选）</label>
+            <select id="uploadKnowledgeBaseSelect">
+              <option value="">仅保存为个人文档</option>
+            </select>
 
             <div class="row">
               <div>
@@ -77,23 +111,48 @@
             </div>
 
             <button id="indexButton" class="primary-button" type="button">建立 PDF 索引</button>
+            <div id="uploadProgress" class="upload-progress hidden" aria-live="polite">
+              <div class="upload-progress-header">
+                <span id="uploadProgressText">准备上传</span>
+                <strong id="uploadProgressCount">0 / 0</strong>
+              </div>
+              <div class="upload-progress-track">
+                <span id="uploadProgressBar"></span>
+              </div>
+            </div>
             <div id="indexStatus" class="status"></div>
             <div id="indexResult" class="result"></div>
-            <button
-                  id="newDocumentConversationButton"
-                  class="ghost-button hidden"
-                  type="button"
-                >
-                  基于当前文档新建对话
-                </button>
           </section>
 
           <section class="side-panel">
             <div class="side-title">
-              <strong>历史文档</strong>
-              <span>选择文档后查看关联会话</span>
+              <strong>知识库文档</strong>
+              <span>不勾选表示检索整个知识库</span>
+            </div>
+            <div id="knowledgeBaseDocumentList" class="knowledge-base-document-list"></div>
+            <button
+              id="newKnowledgeBaseConversationButton"
+              class="ghost-button hidden"
+              type="button"
+            >
+              基于当前知识库新建对话
+            </button>
+            <div id="knowledgeBaseDocumentStatus" class="status"></div>
+          </section>
+
+          <section class="side-panel">
+            <div class="side-title">
+              <strong>文档库</strong>
+              <span>选择文档后继续历史会话，或新建单文档对话</span>
             </div>
             <div id="documentList" class="document-list"></div>
+            <button
+              id="newDocumentConversationButton"
+              class="ghost-button hidden"
+              type="button"
+            >
+              基于所选文档新建对话
+            </button>
             <div id="documentStatus" class="status"></div>
           </section>
 
@@ -106,7 +165,7 @@
             <div id="conversationStatus" class="status"></div>
           </section>
 
-          <details class="side-panel">
+          <details class="side-panel" hidden>
             <summary>检索调试</summary>
             <div class="side-body">
               <label for="searchDocumentId">document_id</label>
@@ -154,11 +213,11 @@
               <div class="quick-grid">
                 <div class="quick-card">
                   <strong>1. 建立索引</strong>
-                  <span>在左侧上传 PDF，系统会得到 document_id。</span>
+                  <span>在左侧上传 PDF，文档会进入您的文档库。</span>
                 </div>
                 <div class="quick-card">
                   <strong>2. 连续提问</strong>
-                  <span>底部输入问题，回答会保存到 conversation。</span>
+                  <span>底部输入问题，回答会自动保存到当前会话。</span>
                 </div>
                 <div class="quick-card">
                   <strong>3. 查看引用</strong>
@@ -173,22 +232,13 @@
 
         <section class="composer-wrap">
           <div class="composer">
-            <div class="composer-meta">
-              <input id="answerConversationId" placeholder="conversation_id：上传或选择会话后自动填入" readonly />
-              <select id="answerUserType" title="当前回答模式">
-                <option value="general">普通用户</option>
-                <option value="undergraduate">本科生</option>
-                <option value="graduate_student">研究生</option>
-                <option value="researcher">科研人员</option>
-                <option value="developer">工程开发者</option>
-                <option value="teacher">教师</option>
-              </select>
-              <input id="answerTopK" type="number" value="3" min="1" title="top-k" />
-            </div>
+            <input id="answerConversationId" type="hidden" />
+            <input id="answerTopK" type="hidden" value="3" />
+            <input id="answerUserType" type="hidden" value="general" />
 
             <div class="input-shell">
-              <textarea id="answerQuery" placeholder="向这份 PDF 提问，例如：这篇论文的研究目的、方法和结论分别是什么？"></textarea>
-              <button id="answerButton" class="send-button" type="button" aria-label="发送">↑</button>
+              <textarea id="answerQuery" placeholder="请先选择或新建会话" disabled></textarea>
+              <button id="answerButton" class="send-button" type="button" aria-label="发送" disabled>↑</button>
             </div>
 
             <div id="answerStatus" class="status"></div>

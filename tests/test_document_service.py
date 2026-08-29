@@ -152,3 +152,52 @@ async def test_list_user_documents_validates_input(
 
     get_user.assert_not_awaited()
     find_documents.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_set_document_index_state_updates_owned_document(monkeypatch):
+    update_state = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        document_service,
+        "update_document_index_state",
+        update_state,
+    )
+    indexed_at = datetime(2026, 8, 29, tzinfo=timezone.utc)
+    index_config = {
+        "chunk_strategy": "recursive",
+        "index_version": "v1",
+    }
+
+    await document_service.set_document_index_state(
+        "user-1",
+        "document-1",
+        "fingerprint-1",
+        index_config,
+        indexed_at,
+    )
+
+    update_state.assert_awaited_once_with(
+        "user-1",
+        "document-1",
+        "fingerprint-1",
+        index_config,
+        indexed_at,
+    )
+
+
+@pytest.mark.asyncio
+async def test_set_document_index_state_rejects_missing_document(monkeypatch):
+    monkeypatch.setattr(
+        document_service,
+        "update_document_index_state",
+        AsyncMock(return_value=False),
+    )
+
+    with pytest.raises(ValueError, match="文档不存在"):
+        await document_service.set_document_index_state(
+            "user-1",
+            "document-404",
+            "fingerprint-1",
+            {"index_version": "v1"},
+            datetime(2026, 8, 29, tzinfo=timezone.utc),
+        )

@@ -106,8 +106,13 @@ def build_context(retrieved_chunks: list[dict]) -> str:
 
     for chunk in retrieved_chunks:
         metadata = chunk["元数据"]
+        source_name = (
+            metadata.get("filename")
+            or metadata.get("document_id")
+            or "unknown document"
+        )
         context_parts.append(
-            f"[第{metadata['page_number']}页, "
+            f"[文档 {source_name}, 第{metadata['page_number']}页, "
             f"distance {chunk['距离']}, "
             f"chunk {metadata['chunk_index']}]\n"
             f"{chunk['文本块']}"

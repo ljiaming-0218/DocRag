@@ -97,6 +97,31 @@ def test_build_chunk_id_is_stable_and_scoped():
     )
 
 
+def test_build_chunk_metadata_supports_legacy_chunk():
+    chunk = make_chunk(page_number=3, chunk_index=7)
+
+    metadata = service.build_chunk_metadata(chunk)
+
+    assert metadata == {
+        "page_number": 3,
+        "chunk_index": 7,
+        "document_id": "document-1",
+        "user_id": "user-1",
+        "extraction_method": "text",
+        "image_count": 0,
+        "chunk_strategy": "fixed",
+    }
+
+
+def test_build_chunk_metadata_includes_recursive_strategy():
+    chunk = make_chunk(page_number=3, chunk_index=7)
+    chunk["strategy"] = "recursive"
+
+    metadata = service.build_chunk_metadata(chunk)
+
+    assert metadata["chunk_strategy"] == "recursive"
+
+
 def test_empty_chunks_return_zero_without_opening_chroma(monkeypatch):
     persistent_client = Mock()
     monkeypatch.setattr(
@@ -126,6 +151,40 @@ def test_first_save_upserts_without_deleting(monkeypatch):
         service.build_chunk_id(chunks[0]),
         service.build_chunk_id(chunks[1]),
     }
+
+
+def test_save_chunks_writes_chunk_strategy(monkeypatch):
+    collection = FakeCollection()
+    install_fake_chroma(monkeypatch, collection)
+    chunk = make_chunk()
+    chunk["strategy"] = "recursive"
+
+    service.save_chunks([chunk])
+
+    metadata = collection.upsert_calls[0]["metadatas"][0]
+    assert metadata["chunk_strategy"] == "recursive"
+
+
+def test_save_chunks_writes_index_metadata(monkeypatch):
+    collection = FakeCollection()
+    install_fake_chroma(monkeypatch, collection)
+    chunk = make_chunk()
+    chunk.update({
+        "chunk_size": 500,
+        "chunk_overlap": 50,
+        "chunk_version": "recursive:v1",
+        "embedding_model": "BAAI/bge-small-zh-v1.5",
+        "embedding_version": "v1",
+        "index_version": "v1",
+        "index_fingerprint": "fingerprint-1",
+    })
+
+    service.save_chunks([chunk])
+
+    metadata = collection.upsert_calls[0]["metadatas"][0]
+    assert metadata["index_fingerprint"] == "fingerprint-1"
+    assert metadata["chunk_version"] == "recursive:v1"
+    assert metadata["embedding_model"] == "BAAI/bge-small-zh-v1.5"
 
 
 def test_reindex_deletes_only_stale_chunk_ids(monkeypatch):
@@ -203,5 +262,40 @@ def test_save_rejects_mixed_chunk_ownership(
 
     with pytest.raises(ValueError, match=expected_message):
         service.save_chunks([first, second])
+
+    persistent_client.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("user_id", "document_id", "query_embedding", "n_results", "message"),
+    [
+        ("", "document-1", [0.1], 3, "user_id 不能为空"),
+        ("user-1", "", [0.1], 3, "document_id 不能为空"),
+        ("user-1", "document-1", [], 3, "query_embedding 不能为空"),
+        ("user-1", "document-1", [0.1], 0, "n_results 必须大于 0"),
+    ],
+)
+def test_query_rejects_invalid_input_before_opening_chroma(
+    monkeypatch,
+    user_id,
+    document_id,
+    query_embedding,
+    n_results,
+    message,
+):
+    persistent_client = Mock()
+    monkeypatch.setattr(
+        service.chromadb,
+        "PersistentClient",
+        persistent_client,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        service.query_chunks(
+            user_id,
+            document_id,
+            query_embedding,
+            n_results,
+        )
 
     persistent_client.assert_not_called()

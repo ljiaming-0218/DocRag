@@ -2,6 +2,7 @@ from asyncio import to_thread
 
 from services.agent_router_service import route_task
 from services.document_service import get_existing_document_for_user
+from services.knowledge_base_service import resolve_knowledge_base_scope
 from services.llm_service import generate_answer
 from services.message_service import (
     create_message,
@@ -18,13 +19,35 @@ from services.prompt_service import (
 from services.query_rewrite_service import rewrite_query
 from services.search_service import (
     search_relevant_chunks,
+    search_relevant_chunks_for_documents,
     search_summary_chunks,
+    search_summary_chunks_for_documents,
 )
 from services.user_service import ALLOWED_USER_TYPES, get_existing_user
 from stores.conversation_store import find_conversation_by_id
 
 
 NO_SOURCE_ANSWER = "当前文献未提供相关信息。"
+
+
+def _enrich_source_filenames(
+    sources: list[dict],
+    document_filenames: dict[str, str],
+) -> None:
+    for source in sources:
+        metadata = next(
+            (
+                value
+                for value in source.values()
+                if isinstance(value, dict) and "document_id" in value
+            ),
+            None,
+        )
+        if metadata is None:
+            continue
+        filename = document_filenames.get(metadata["document_id"])
+        if filename:
+            metadata.setdefault("filename", filename)
 
 
 async def prepare_ask_context(
@@ -57,10 +80,28 @@ async def prepare_ask_context(
     if conversation["user_id"] != user_id:
         raise PermissionError("当前用户无权访问该会话")
 
-    document = await get_existing_document_for_user(
-        user_id,
-        conversation["document_id"],
-    )
+    kb_id = conversation.get("kb_id")
+    if kb_id:
+        scope = await resolve_knowledge_base_scope(
+            user_id,
+            kb_id,
+            conversation.get("selected_document_ids"),
+        )
+        document_ids = scope["document_ids"]
+        document_filenames = scope["document_filenames"]
+        document_language = scope["language"]
+        knowledge_base_name = scope["knowledge_base_name"]
+    else:
+        document = await get_existing_document_for_user(
+            user_id,
+            conversation["document_id"],
+        )
+        document_ids = [conversation["document_id"]]
+        document_filenames = {
+            document["_id"]: document["filename"],
+        }
+        document_language = document.get("language", "unknown")
+        knowledge_base_name = None
     user = await get_existing_user(user_id)
 
     request_user_type = (
@@ -97,9 +138,18 @@ async def prepare_ask_context(
             rewrite_query,
             history,
             query,
-            document.get("language", "unknown"),
+            document_language,
         )
-        if task_type == "summary":
+        if task_type == "summary" and kb_id:
+            summary_result = await to_thread(
+                search_summary_chunks_for_documents,
+                user_id,
+                document_ids,
+                rewritten_query,
+            )
+            sources = summary_result["sources"]
+            retrieval_queries = summary_result["retrieval_queries"]
+        elif task_type == "summary":
             summary_result = await to_thread(
                 search_summary_chunks,
                 user_id,
@@ -108,6 +158,15 @@ async def prepare_ask_context(
             )
             sources = summary_result["sources"]
             retrieval_queries = summary_result["retrieval_queries"]
+        elif kb_id:
+            sources = await to_thread(
+                search_relevant_chunks_for_documents,
+                user_id,
+                document_ids,
+                rewritten_query,
+                n_results,
+            )
+            retrieval_queries = [rewritten_query]
         else:
             sources = await to_thread(
                 search_relevant_chunks,
@@ -117,6 +176,8 @@ async def prepare_ask_context(
                 n_results,
             )
             retrieval_queries = [rewritten_query]
+
+        _enrich_source_filenames(sources, document_filenames)
 
         prompt = build_rag_prompt(
             query,
@@ -139,6 +200,9 @@ async def prepare_ask_context(
     return {
         "conversation_id": conversation["_id"],
         "document_id": conversation["document_id"],
+        "kb_id": kb_id,
+        "knowledge_base_name": knowledge_base_name,
+        "document_ids": document_ids,
         "user_id": conversation["user_id"],
         "history": history,
         "query": query,
@@ -254,6 +318,9 @@ async def ask_conversation(
 
     return {
         "conversation_id": context["conversation_id"],
+        "kb_id": context.get("kb_id"),
+        "knowledge_base_name": context.get("knowledge_base_name"),
+        "document_ids": context.get("document_ids", []),
         "user_type": context["user_type"],
         "answer": answer,
         "sources": context["sources"],

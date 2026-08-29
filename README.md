@@ -11,7 +11,7 @@ app_port: 7860
 
 # DocRAG Agent：面向 PDF 文献阅读的 RAG 智能助手
 
-DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目报告的 PDF 文献阅读助手。系统以检索增强生成（RAG）为主链路，支持文档解析、文本切分、向量检索、重排、多轮问答、引用来源展示和文档级历史会话。
+DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目报告的 PDF 文献阅读助手。系统以检索增强生成（RAG）为主链路，支持文档解析、版本化文本切分、单文档与知识库级多文档检索、重排、多轮问答、引用来源展示和历史会话。
 
 项目重点不是单纯调用大模型，而是实现一条可调试、可评估、可持久化的文档问答流程。系统回答仅用于辅助阅读，重要结论应回到原始文档和引用片段核验。
 
@@ -35,14 +35,17 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 
 文档、会话和消息按用户归属保存。用户可以选择已索引文档、恢复历史会话，也可以基于同一文档新建对话。
 
-## 当前能力
+## 功能特性
 
 ### 文档处理
 
 - 上传 PDF，并使用 PyMuPDF 按页提取文本和页码。
 - 通过 `chunk_size`、`chunk_overlap` 切分文本，并保留页码、块序号、文档标识等 metadata。
+- 支持 `fixed` 和 `recursive` 两种切片策略，并为切片算法维护显式 `chunk_version`。
 - 计算 PDF 内容的 SHA-256 `document_hash`。
 - 通过 `user_id + document_hash` 识别同一用户重复上传的相同文件，避免重复解析和索引。
+- 根据切片参数、切片版本、Embedding 模型和索引版本生成 `index_fingerprint`；只有指纹一致才复用旧索引。
+- `/pdf/index` 支持 `force_reindex=true`，用于忽略旧指纹并强制重建同一 `document_id` 的向量索引。
 - 对疑似扫描页支持可选的 Tesseract 中英文 OCR 回退。
 - 记录文档主要语言，用于跨语言 Query Rewrite。
 
@@ -54,6 +57,16 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 - 保存并展示回答对应的 sources，包括页码、chunk 和检索分数。
 - 检索无证据时直接拒答，不调用 LLM 基于参数知识补充答案。
 - 对 OpenRouter/OpenAI-compatible API 的超时、限流、连接失败和异常状态进行分类处理。
+
+### 知识库与多文档问答
+
+- 一个用户可以创建、重命名和删除多个知识库。
+- 文档与知识库使用独立关联记录，同一文档可以加入多个知识库，无需重复生成向量。
+- 支持查看知识库文档、移入文档和移出文档。
+- 会话可以绑定单个文档，也可以绑定整个知识库。
+- 知识库会话可选择部分文档；不选择时检索知识库中的全部文档。
+- 多文档检索始终保留 `user_id` 过滤，并使用 `document_id in [...]` 限定知识库范围。
+- 各文档候选统一进入 CrossEncoder Rerank，最终 sources 保留文件名、文档 ID、页码和 chunk 信息。
 
 ### 用户与多轮会话
 
@@ -82,17 +95,19 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 
 ```text
 创建或选择用户
-  → 上传 PDF
+  → 创建或选择知识库
+  → 上传 PDF，并按需关联知识库
   → 计算 document_hash，检查重复文档
   → PyMuPDF 按页解析，必要时 OCR
   → 文本切分与 metadata 构造
   → Embedding
   → Chroma 向量持久化
-  → 创建或恢复文档会话
+  → 创建或恢复单文档/知识库会话
   → 读取最近历史
   → Query Rewrite
   → Agent Router 识别 qa / summary / report / term / source_check
-  → 向量召回 + CrossEncoder Rerank
+  → 用户与知识库范围校验
+  → 单文档或多文档向量召回 + 全局 CrossEncoder Rerank
   → 组装 Prompt
   → 调用 LLM
   → 保存 answer、sources 和检索调试信息
@@ -102,6 +117,8 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 ```mermaid
 flowchart LR
     UI[Web 前端] --> API[FastAPI Router]
+    API --> KB[知识库服务]
+    KB --> MEMORY[(MongoDB)]
     API --> INGEST[PDF 索引服务]
     INGEST --> PARSE[PyMuPDF / OCR]
     PARSE --> SPLIT[文本切分]
@@ -109,7 +126,7 @@ flowchart LR
     EMBED --> CHROMA[(Chroma)]
 
     API --> CHAT[会话问答服务]
-    CHAT --> MEMORY[(MongoDB)]
+    CHAT --> MEMORY
     CHAT --> REWRITE[Query Rewrite]
     REWRITE --> AGENT[Agent Router]
     AGENT --> RETRIEVE[向量召回 + Rerank]
@@ -162,7 +179,7 @@ MedRag/
 │  │  └─ styles.css
 │  └─ docs/
 ├─ eval/
-│  ├─ rag_dataset/       # 3 篇 PDF、15 道问题和 gold evidence
+│  ├─ rag_dataset/       # 评估文档、问题、gold evidence 与结果
 │  ├─ run_eval.py
 │  ├─ run_follow_up_eval.py
 │  ├─ calculate_metrics.py
@@ -192,14 +209,35 @@ MedRag/
 - `document_hash`
 - `filename`
 - `language`
+- `index_fingerprint`
+- `index_config`
+- `indexed_at`
 - `created_at`
 - `updated_at`
+
+### knowledge_bases
+
+- `kb_id`
+- `user_id`
+- `name`
+- `description`
+- `created_at`
+- `updated_at`
+
+### knowledge_base_documents
+
+- `kb_id`
+- `user_id`
+- `document_id`
+- `added_at`
 
 ### conversations
 
 - `conversation_id`
 - `user_id`
 - `document_id`
+- `kb_id`
+- `selected_document_ids`
 - `title`
 - `user_type`
 - `created_at`
@@ -250,7 +288,7 @@ OPENROUTER_MODEL=your_model
 CHROMA_DIR=D:/MedRag/runtime/chroma_db
 UPLOAD_DIR=D:/MedRag/runtime/uploads
 MONGODB_URI=mongodb://127.0.0.1:27017
-MONGODB_DB_NAME=docrag
+MONGODB_DB_NAME=medrag
 OCR_ENABLED=false
 OCR_LANGUAGES=eng+chi_sim
 OCR_DPI=300
@@ -273,6 +311,7 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - 前端：<http://127.0.0.1:8000/>
 - Swagger：<http://127.0.0.1:8000/docs>
 - 健康检查：<http://127.0.0.1:8000/health>
+- 就绪检查：<http://127.0.0.1:8000/ready>
 
 模型已缓存且 Hugging Face 网络不可用时，可在启动前设置：
 
@@ -286,15 +325,21 @@ set TRANSFORMERS_OFFLINE=1
 | 方法与路径 | 功能 |
 | --- | --- |
 | `GET /health` | 服务存活检查 |
+| `GET /ready` | 检查数据库等关键依赖是否就绪 |
 | `POST /users` | 创建或获取轻量用户 |
-| `POST /pdf/parse` | 解析 PDF 并返回分页文本 |
-| `POST /pdf/chunks` | 查看切分结果 |
-| `POST /pdf/index` | 去重、解析、切分、向量化并建立索引 |
+| `POST /pdf/parse` | 临时解析 PDF 并返回分页文本；响应后删除临时文件，不创建 Document 或索引 |
+| `POST /pdf/chunks` | 临时预览切分结果；不写入 MongoDB 或 Chroma |
+| `POST /pdf/index` | 去重、解析、版本化切分、向量化并建立索引；支持 `force_reindex` |
 | `POST /pdf/search` | 调试指定用户和文档的检索结果 |
 | `POST /pdf/prompt-preview` | 预览单轮 RAG Prompt |
 | `POST /pdf/answer` | 单轮 RAG 问答兼容接口 |
-| `POST /conversations` | 基于用户和文档创建会话 |
-| `GET /conversations` | 按用户或文档获取会话列表 |
+| `POST /knowledge-bases` | 创建知识库 |
+| `GET /knowledge-bases` | 获取当前用户的知识库列表 |
+| `GET/PATCH/DELETE /knowledge-bases/{kb_id}` | 查询、修改或删除知识库 |
+| `POST/DELETE /knowledge-bases/{kb_id}/documents/{document_id}` | 将文档移入或移出知识库 |
+| `GET /knowledge-bases/{kb_id}/documents` | 获取知识库文档列表 |
+| `POST /conversations` | 创建单文档或知识库会话 |
+| `GET /conversations` | 按用户、文档或知识库获取会话列表 |
 | `GET /conversations/{id}/messages` | 校验用户归属并获取历史消息 |
 | `POST /conversations/{id}/ask` | 执行多轮 Query Rewrite、检索和回答 |
 
@@ -315,7 +360,7 @@ D:\Anaconda\envs\medrag\python.exe -m pip install -r requirements-dev.txt
 D:\Anaconda\envs\medrag\python.exe -m pytest -q
 ```
 
-当前业务层回归测试覆盖：
+当前自动化回归测试覆盖：
 
 - 不指定文档时查询用户全部会话。
 - 拒绝空 `document_id`。
@@ -324,8 +369,18 @@ D:\Anaconda\envs\medrag\python.exe -m pytest -q
 - assistant 消息保存 sources。
 - 前端 Playwright smoke 覆盖创建用户、上传索引、重复上传、历史会话、追问和 sources 展示。
 - 前端静态回归检查 `indexPdf()` 不会在创建会话前读取 `conversation.user_type`。
+- 知识库 CRUD、用户归属校验和文档关联幂等性。
+- 整个知识库与指定文档范围的多文档检索。
+- Chroma `user_id + document_id $in` 过滤和跨文档全局 Rerank。
+- 前端知识库创建、文档关联、知识库会话和 sources 文件名展示。
 
-这些是 Mock 单元测试，不替代 MongoDB、Chroma、真实模型和完整接口的集成测试。
+当前全量工程测试基线：
+
+```text
+154 passed
+```
+
+测试包含业务单元测试、接口契约测试和前端 smoke test。大量外部依赖通过 Mock 隔离，因此不能替代 MongoDB、Chroma、真实模型和完整接口的集成测试。
 
 ## RAG 评估
 
@@ -350,7 +405,7 @@ python eval\calculate_metrics.py
 
 本轮 16 道非追问题全部执行成功；3 道 follow-up 在连续评估后被免费模型供应商限流并返回 503，因此执行成功率下降不能直接归因于 Query Rewrite。检索 bad case 主要集中在 `LORA-03`、`COT-03`、`COT-TERM-01`，`LORA-01` 只覆盖部分 gold evidence。新增 `source_check` 两题的 HitRate@3 为 1.0、Recall@3 为 0.8333，但样本数很小，只能作为回归基线。
 
-## 我遇到的问题与修复
+## 关键工程问题与处理
 
 ### CORS 导致前端 `Failed to fetch`
 
@@ -376,16 +431,19 @@ python eval\calculate_metrics.py
 - Chroma 使用本地文件持久化，免费云实例重启后可能丢失索引。
 - `/health` 当前属于存活检查，不验证 MongoDB、Chroma、模型和 LLM 供应商的可用性。
 - 当前评估集规模较小，适合回归和基线比较，不代表生产环境效果。
-- 现阶段缺少系统化接口集成测试、真实鉴权、监控指标、并发测试和容量测试。
+- 知识库删除涉及 MongoDB 多个集合，目前没有事务保证跨集合原子性。
+- `/pdf/search` 调试接口仍以单文档为主，多文档问答通过 conversation 主链路执行。
+- 多文档工程链路已经完成，但尚未形成固定的多文档检索效果基线。
+- 现阶段仍缺少真实鉴权、完整监控指标、并发测试和容量测试。
 
 ## 后续计划
 
-1. 重跑最新评估并分析 Summary、LORA-03、LORA-05 的候选召回和重排过程。
-2. 增加接口契约、MongoDB/Chroma 集成测试和线上冒烟测试。
-3. 补充结构化日志、请求级追踪和依赖服务 readiness。
-4. 在需要正式多用户服务时引入真实登录态与 JWT/Session 鉴权。
-5. 通过受控对照实验评估 Hybrid Search、Reranker 参数和多语言 Embedding，而不是直接替换生产链路。
+1. 固定多文档评估集，验证整库检索、部分文档检索、跨文档比较和越权隔离。
+2. 分析多文档候选覆盖、全局 Rerank 排名、引用准确性和延迟，形成可复现基线。
+3. 在基线稳定后实现 Hybrid Retrieval，引入 BM25、RRF、候选去重和证据阈值。
+4. 补充 MongoDB/Chroma 真实集成测试、结构化日志、请求级追踪和依赖 readiness。
+5. 达到实际容量瓶颈后再通过 benchmark 决定是否从 Chroma 迁移到 Qdrant 或 Milvus。
 
 ## 项目声明
 
-本项目用于学习和演示 PDF 文献 RAG 工程流程。系统生成内容不构成医学、法律、投资或其他专业建议。
+本项目是面向 PDF 文献检索与辅助阅读的实验性系统。系统生成内容不构成医学、法律、投资或其他专业建议；重要结论应结合原始文档和引用来源核验。

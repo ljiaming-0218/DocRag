@@ -150,3 +150,38 @@ async def test_upload_pdf_uses_stream_storage(monkeypatch, tmp_path):
 
     assert result["document_hash"] == sha256(VALID_PDF).hexdigest()
     assert Path(result["保存路径"]).read_bytes() == VALID_PDF
+
+
+@pytest.mark.asyncio
+async def test_temporary_pdf_is_removed_after_context(monkeypatch, tmp_path):
+    configure_storage(monkeypatch, tmp_path)
+    upload = UploadFile(
+        filename="paper.pdf",
+        file=BytesIO(VALID_PDF),
+    )
+
+    async with service.temporary_pdf(upload) as result:
+        preview_path = Path(result["保存路径"])
+        assert preview_path.exists()
+        assert preview_path.name.startswith(".preview_")
+
+    assert not preview_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_temporary_pdf_is_removed_when_consumer_fails(
+    monkeypatch,
+    tmp_path,
+):
+    configure_storage(monkeypatch, tmp_path)
+    upload = UploadFile(
+        filename="paper.pdf",
+        file=BytesIO(VALID_PDF),
+    )
+
+    with pytest.raises(RuntimeError, match="preview failed"):
+        async with service.temporary_pdf(upload) as result:
+            preview_path = Path(result["保存路径"])
+            raise RuntimeError("preview failed")
+
+    assert not preview_path.exists()

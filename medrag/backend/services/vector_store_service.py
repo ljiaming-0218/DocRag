@@ -18,6 +18,35 @@ def _raise_chroma_error(operation: str, error: Exception) -> None:
         f"请备份并重建 {CHROMA_DIR} 后重新索引 PDF。原始错误: {error}"
     ) from error
 
+
+
+def build_chunk_metadata(chunk: dict) -> dict:
+    metadata = {
+        "page_number": chunk["页码"],
+        "chunk_index": chunk["块索引"],
+        "document_id": chunk["document_id"],
+        "user_id": chunk["user_id"],
+        "extraction_method": chunk.get("提取方式", "text"),
+        "image_count": chunk.get("图片数量", 0),
+        "chunk_strategy": chunk.get("strategy", "fixed"),
+    }
+    optional_fields = (
+        "chunk_size",
+        "chunk_overlap",
+        "chunk_version",
+        "embedding_model",
+        "embedding_version",
+        "index_version",
+        "index_fingerprint",
+    )
+    for field in optional_fields:
+        value = chunk.get(field)
+        if value is not None:
+            metadata[field] = value
+    return metadata
+
+
+
 def has_chunks(user_id: str, document_id: str) -> bool:
     if not user_id:
         raise ValueError("user_id 不能为空")
@@ -85,14 +114,7 @@ def save_chunks(chunks:list[dict]) -> int:
     documents = [chunk["文本块"] for chunk in chunks]
     embeddings = [chunk["embedding"] for chunk in chunks]
     metadatas = [
-        {
-            "page_number": chunk["页码"],
-            "chunk_index": chunk["块索引"],
-            "document_id": chunk["document_id"],
-            "user_id": chunk["user_id"],
-            "extraction_method": chunk.get("提取方式", "text"),
-            "image_count": chunk.get("图片数量", 0),
-        }
+        build_chunk_metadata(chunk)
         for chunk in chunks
     ]
     try:
@@ -117,18 +139,23 @@ def save_chunks(chunks:list[dict]) -> int:
             _raise_chroma_error("清理过期索引", exc)
     return len(new_ids)
 
-
-def query_chunks(user_id: str, document_id: str, query_embedding: list[float], n_results: int = 3) -> dict:
+def query_chunks(
+    user_id: str,
+    document_id: str,
+    query_embedding: list[float],
+    n_results: int = 3,
+) -> dict:
+    user_id = user_id.strip()
+    if not user_id:
+        raise ValueError("user_id 不能为空")
+    if not document_id:
+        raise ValueError("document_id 不能为空")
     if not query_embedding:
         raise ValueError("query_embedding 不能为空")
     if n_results <= 0:
         raise ValueError("n_results 必须大于 0")
-    if not document_id:
-        raise ValueError("document_id 不能为空")
-    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
 
-    if not user_id:
-        raise ValueError("user_id 不能为空")
+    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
 
 
     try:
@@ -152,6 +179,53 @@ def query_chunks(user_id: str, document_id: str, query_embedding: list[float], n
     except InternalError as exc:
         _raise_chroma_error("查询", exc)
     return result
+
+
+def query_chunks_by_documents(
+    user_id: str,
+    document_ids: list[str],
+    query_embedding: list[float],
+    n_results: int = 3,
+) -> dict:
+    user_id = user_id.strip()
+    if not user_id:
+        raise ValueError("user_id cannot be empty")
+    if not document_ids:
+        raise ValueError("document_ids cannot be empty")
+    if not query_embedding:
+        raise ValueError("query_embedding cannot be empty")
+    if n_results <= 0:
+        raise ValueError("n_results must be greater than 0")
+
+    normalized_document_ids = []
+    for document_id in document_ids:
+        document_id = document_id.strip()
+        if not document_id:
+            raise ValueError("document_id cannot be empty")
+        if document_id not in normalized_document_ids:
+            normalized_document_ids.append(document_id)
+
+    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    try:
+        collection = client.get_collection(name=COLLECTION_NAME)
+    except NotFoundError:
+        return _empty_query_result()
+    except InternalError as exc:
+        _raise_chroma_error("read collection", exc)
+
+    try:
+        return collection.query(
+            query_embeddings=[query_embedding],
+            n_results=n_results,
+            where={
+                "$and": [
+                    {"user_id": user_id},
+                    {"document_id": {"$in": normalized_document_ids}},
+                ]
+            },
+        )
+    except InternalError as exc:
+        _raise_chroma_error("query knowledge base", exc)
 
 
 def build_chunk_id(chunk: dict) -> str:

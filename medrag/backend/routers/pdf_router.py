@@ -3,15 +3,17 @@ from asyncio import to_thread
 from fastapi import APIRouter, File, UploadFile
 
 from api_errors import APIError
-from services.user_service import get_existing_user
 from services.chunk_validation_service import validate_chunk_params
 from services.llm_service import LLMServiceError, generate_answer
 from services.prompt_service import build_rag_prompt
-from services.text_splitter_service import split_pages
+from services.text_splitter_service import (
+    DEFAULT_CHUNK_STRATEGY,
+    split_pages,
+)
 
 from services.document_ingestion_service import (
-    build_pdf_pages,
     index_document,
+    preview_pdf_pages,
 )
 from services.search_service import search_relevant_chunks
 
@@ -66,6 +68,8 @@ async def index_pdfs(
     file: UploadFile = File(...),
     chunk_size: int = 500,
     chunk_overlap: int = 50,
+    strategy: str = DEFAULT_CHUNK_STRATEGY,
+    force_reindex: bool = False,
 ) -> dict:
     try:
         return await index_document(
@@ -73,24 +77,32 @@ async def index_pdfs(
             file=file,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
+            strategy=strategy,
+            force_reindex=force_reindex,
         )
     except (ValueError, RuntimeError) as error:
         raise_pdf_error(error)
 
 @router.post("/parse")
-async def parse_pdf(user_id: str,file: UploadFile = File(...), ) -> dict:
+async def parse_pdf(
+    user_id: str,
+    file: UploadFile = File(...),
+) -> dict:
     try:
-        return await build_pdf_pages(user_id, file)
+        return await preview_pdf_pages(user_id, file)
     except (ValueError, RuntimeError) as error:
         raise_pdf_error(error)
 
 @router.post("/chunks")
-async def parse_pdf_chunks(user_id: str, file: UploadFile = File(...), chunk_size: int = 500, chunk_overlap: int = 50) -> dict:
-    
+async def parse_pdf_chunks(
+    user_id: str,
+    file: UploadFile = File(...),
+    chunk_size: int = 500,
+    chunk_overlap: int = 50,
+) -> dict:
     try:
-        user = await get_existing_user(user_id)
         validate_chunk_params(chunk_size, chunk_overlap)
-        context = await build_pdf_pages(user_id, file)
+        context = await preview_pdf_pages(user_id, file)
         chunks = await to_thread(
             split_pages,
             context["每页内容"],
@@ -105,7 +117,8 @@ async def parse_pdf_chunks(user_id: str, file: UploadFile = File(...), chunk_siz
         "总页数": context["总页数"],
         "每页内容块": chunks,
         "document_id": context["document_id"],
-        "user_id": user["user_id"],
+        "user_id": context["user_id"],
+        "persisted": False,
     }
 
 @router.post("/prompt-preview")

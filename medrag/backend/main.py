@@ -17,12 +17,14 @@ from stores.database import close_database, connect_database
 from stores.message_store import create_message_indexes
 from stores.conversation_store import create_conversation_indexes
 from stores.document_store import create_document_indexes
+from stores.knowledge_base_store import create_knowledge_base_indexes
 
 from config import FRONTEND_DIR
 
 from routers.user_router import router as user_router
 from routers.conversation_router import router as conversation_router
 from routers.pdf_router import router as pdf_router
+from routers.knowledge_base_router import router as knowledge_base_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,6 +34,7 @@ async def lifespan(app: FastAPI):
         await create_message_indexes()
         await create_user_indexes()
         await create_document_indexes()
+        await create_knowledge_base_indexes()
         yield
     finally:
         await close_database()
@@ -64,6 +67,7 @@ app.add_middleware(
 app.include_router(pdf_router)
 app.include_router(conversation_router)
 app.include_router(user_router)
+app.include_router(knowledge_base_router)
 
 @app.get("/health")
 def health_check() -> dict:

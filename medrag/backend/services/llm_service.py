@@ -40,7 +40,7 @@ def create_llm_client():
     return OpenAI(
         api_key=OPENROUTER_API_KEY,
         base_url=OPENROUTER_BASE_URL,
-        timeout=30,
+        timeout=120,
         max_retries=1,
     )
 

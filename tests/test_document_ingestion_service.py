@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -10,6 +11,7 @@ def make_context(
     *,
     existing_document: bool = False,
     document_language: str = "unknown",
+    index_fingerprint: str | None = None,
 ) -> dict:
     return {
         "文件名": "paper.pdf",
@@ -19,6 +21,9 @@ def make_context(
         "user_id": "user-1",
         "existing_document": existing_document,
         "document_language": document_language,
+        "index_fingerprint": index_fingerprint,
+        "index_config": None,
+        "indexed_at": None,
     }
 
 
@@ -53,11 +58,12 @@ def install_index_dependencies(
         prepare_document=AsyncMock(return_value=context),
         has_chunks=Mock(return_value=existing_chunks),
         list_conversations=AsyncMock(return_value=conversations),
-        parse_document_pages=Mock(return_value=pages),
+        parse_document_pages=AsyncMock(return_value=pages),
         detect_document_language=Mock(
             return_value=document_language,
         ),
         set_document_language=AsyncMock(),
+        set_document_index_state=AsyncMock(),
         split_pages=Mock(return_value=chunks),
         embed_chunks=Mock(return_value=embedded_chunks),
         save_chunks=Mock(return_value=len(embedded_chunks)),
@@ -106,9 +112,15 @@ async def test_new_document_builds_index(monkeypatch):
         "document-1",
         "en",
     )
-    dependencies.split_pages.assert_called_once_with(pages, 500, 50)
+    dependencies.split_pages.assert_called_once_with(
+        pages,
+        chunk_size=500,
+        chunk_overlap=50,
+        strategy="fixed",
+    )
     dependencies.embed_chunks.assert_called_once_with(chunks)
     dependencies.save_chunks.assert_called_once_with(embedded_chunks)
+    dependencies.set_document_index_state.assert_awaited_once()
     assert result["document_id"] == "document-1"
     assert result["总页数"] == 3
     assert result["总块数"] == 2
@@ -117,16 +129,40 @@ async def test_new_document_builds_index(monkeypatch):
     assert result["ocr_required_page_count"] == 1
     assert result["empty_page_count"] == 1
     assert result["document_language"] == "en"
+    assert result["chunk_strategy"] == "fixed"
+
+
+@pytest.mark.asyncio
+async def test_recursive_strategy_is_forwarded_to_splitter(monkeypatch):
+    dependencies = install_index_dependencies(monkeypatch)
+
+    result = await service.index_document(
+        "user-1",
+        object(),
+        chunk_size=500,
+        chunk_overlap=50,
+        strategy="recursive",
+    )
+
+    dependencies.split_pages.assert_called_once_with(
+        dependencies.parse_document_pages.return_value,
+        chunk_size=500,
+        chunk_overlap=50,
+        strategy="recursive",
+    )
+    assert result["chunk_strategy"] == "recursive"
 
 
 @pytest.mark.asyncio
 async def test_existing_index_skips_reprocessing(monkeypatch):
     history = [{"conversation_id": "conversation-1"}]
+    index_config = service.build_index_config("fixed", 500, 50)
     dependencies = install_index_dependencies(
         monkeypatch,
         context=make_context(
             existing_document=True,
             document_language="en",
+            index_fingerprint=service.build_index_fingerprint(index_config),
         ),
         existing_chunks=True,
         conversations=history,
@@ -148,16 +184,19 @@ async def test_existing_index_skips_reprocessing(monkeypatch):
     dependencies.split_pages.assert_not_called()
     dependencies.embed_chunks.assert_not_called()
     dependencies.save_chunks.assert_not_called()
+    dependencies.set_document_index_state.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_existing_index_backfills_unknown_language(monkeypatch):
     pages = [{"文本": "中文内容", "提取方式": "text"}]
+    index_config = service.build_index_config("fixed", 500, 50)
     dependencies = install_index_dependencies(
         monkeypatch,
         context=make_context(
             existing_document=True,
             document_language="unknown",
+            index_fingerprint=service.build_index_fingerprint(index_config),
         ),
         pages=pages,
         existing_chunks=True,
@@ -186,11 +225,13 @@ async def test_existing_index_backfills_unknown_language(monkeypatch):
 async def test_language_backfill_failure_does_not_break_reuse(
     monkeypatch,
 ):
+    index_config = service.build_index_config("fixed", 500, 50)
     dependencies = install_index_dependencies(
         monkeypatch,
         context=make_context(
             existing_document=True,
             document_language="unknown",
+            index_fingerprint=service.build_index_fingerprint(index_config),
         ),
         existing_chunks=True,
     )
@@ -209,6 +250,81 @@ async def test_language_backfill_failure_does_not_break_reuse(
     assert result["document_language"] == "unknown"
     dependencies.set_document_language.assert_not_awaited()
     dependencies.save_chunks.assert_not_called()
+
+
+def test_index_fingerprint_is_stable_and_config_sensitive():
+    fixed_config = service.build_index_config("fixed", 500, 50)
+    same_config = service.build_index_config("fixed", 500, 50)
+    recursive_config = service.build_index_config("recursive", 500, 50)
+
+    assert service.build_index_fingerprint(fixed_config) == (
+        service.build_index_fingerprint(same_config)
+    )
+    assert service.build_index_fingerprint(fixed_config) != (
+        service.build_index_fingerprint(recursive_config)
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stored_fingerprint",
+    [None, "stale-fingerprint"],
+)
+async def test_stale_index_fingerprint_triggers_reindex(
+    monkeypatch,
+    stored_fingerprint,
+):
+    dependencies = install_index_dependencies(
+        monkeypatch,
+        context=make_context(
+            existing_document=True,
+            document_language="en",
+            index_fingerprint=stored_fingerprint,
+        ),
+        existing_chunks=True,
+    )
+
+    result = await service.index_document(
+        "user-1",
+        object(),
+        chunk_size=500,
+        chunk_overlap=50,
+        strategy="recursive",
+    )
+
+    assert result["reindexed"] is True
+    assert result["index_config"]["chunk_strategy"] == "recursive"
+    dependencies.parse_document_pages.assert_awaited_once()
+    dependencies.save_chunks.assert_called_once()
+    dependencies.set_document_index_state.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_force_reindex_rebuilds_matching_index(monkeypatch):
+    index_config = service.build_index_config("fixed", 500, 50)
+    dependencies = install_index_dependencies(
+        monkeypatch,
+        context=make_context(
+            existing_document=True,
+            document_language="en",
+            index_fingerprint=service.build_index_fingerprint(index_config),
+        ),
+        existing_chunks=True,
+    )
+
+    result = await service.index_document(
+        "user-1",
+        object(),
+        chunk_size=500,
+        chunk_overlap=50,
+        force_reindex=True,
+    )
+
+    assert result["reindexed"] is True
+    assert result["force_reindex"] is True
+    dependencies.parse_document_pages.assert_awaited_once()
+    dependencies.save_chunks.assert_called_once()
+    dependencies.set_document_index_state.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -315,35 +431,45 @@ async def test_vector_store_failure_is_propagated(monkeypatch):
 
     dependencies.embed_chunks.assert_called_once()
     dependencies.save_chunks.assert_called_once()
+    dependencies.set_document_index_state.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_build_pdf_pages_validates_user_before_upload(
+async def test_preview_pdf_pages_validates_user_before_temp_file(
     monkeypatch,
 ):
     get_existing_user = AsyncMock(
         side_effect=ValueError("用户不存在"),
     )
-    upload_pdf = AsyncMock()
+    temporary_pdf = Mock()
     monkeypatch.setattr(
         service,
         "get_existing_user",
         get_existing_user,
     )
-    monkeypatch.setattr(service, "upload_pdf", upload_pdf)
+    monkeypatch.setattr(service, "temporary_pdf", temporary_pdf)
 
     with pytest.raises(ValueError, match="用户不存在"):
-        await service.build_pdf_pages(
+        await service.preview_pdf_pages(
             "missing-user",
             object(),
         )
 
-    upload_pdf.assert_not_awaited()
+    temporary_pdf.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_build_pdf_pages_adds_document_metadata(monkeypatch):
+async def test_preview_pdf_pages_does_not_persist_document(monkeypatch):
     pages = [{"页码": 1, "文本": "content"}]
+
+    @asynccontextmanager
+    async def fake_temporary_pdf(_file):
+        yield {
+            "文件名": "paper.pdf",
+            "保存路径": "D:/tmp/preview.tmp",
+            "document_hash": "hash-1",
+        }
+
     monkeypatch.setattr(
         service,
         "get_existing_user",
@@ -351,21 +477,14 @@ async def test_build_pdf_pages_adds_document_metadata(monkeypatch):
     )
     monkeypatch.setattr(
         service,
-        "upload_pdf",
-        AsyncMock(return_value={
-            "文件名": "paper.pdf",
-            "保存路径": "D:/tmp/paper.pdf",
-            "document_hash": "hash-1",
-        }),
+        "temporary_pdf",
+        fake_temporary_pdf,
     )
+    get_or_create_document = AsyncMock()
     monkeypatch.setattr(
         service,
         "get_or_create_document",
-        AsyncMock(return_value={
-            "document_id": "document-1",
-            "document_hash": "hash-1",
-            "existing_document": False,
-        }),
+        get_or_create_document,
     )
     monkeypatch.setattr(
         service,
@@ -373,18 +492,29 @@ async def test_build_pdf_pages_adds_document_metadata(monkeypatch):
         Mock(return_value=pages),
     )
 
-    result = await service.build_pdf_pages(
+    result = await service.preview_pdf_pages(
         "user-1",
         object(),
     )
 
     assert result["总页数"] == 1
-    assert result["每页内容"][0]["document_id"] == "document-1"
+    assert result["document_id"] is None
+    assert result["persisted"] is False
+    assert result["每页内容"][0]["document_id"] is None
     assert result["每页内容"][0]["user_id"] == "user-1"
+    get_or_create_document.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_build_pdf_pages_wraps_parser_failure(monkeypatch):
+async def test_preview_pdf_pages_wraps_parser_failure(monkeypatch):
+    @asynccontextmanager
+    async def fake_temporary_pdf(_file):
+        yield {
+            "文件名": "paper.pdf",
+            "保存路径": "D:/tmp/preview.tmp",
+            "document_hash": "hash-1",
+        }
+
     monkeypatch.setattr(
         service,
         "get_existing_user",
@@ -392,21 +522,8 @@ async def test_build_pdf_pages_wraps_parser_failure(monkeypatch):
     )
     monkeypatch.setattr(
         service,
-        "upload_pdf",
-        AsyncMock(return_value={
-            "文件名": "paper.pdf",
-            "保存路径": "D:/tmp/paper.pdf",
-            "document_hash": "hash-1",
-        }),
-    )
-    monkeypatch.setattr(
-        service,
-        "get_or_create_document",
-        AsyncMock(return_value={
-            "document_id": "document-1",
-            "document_hash": "hash-1",
-            "existing_document": False,
-        }),
+        "temporary_pdf",
+        fake_temporary_pdf,
     )
     monkeypatch.setattr(
         service,
@@ -415,7 +532,7 @@ async def test_build_pdf_pages_wraps_parser_failure(monkeypatch):
     )
 
     with pytest.raises(RuntimeError, match="PDF 解析失败"):
-        await service.build_pdf_pages(
+        await service.preview_pdf_pages(
             "user-1",
             object(),
         )

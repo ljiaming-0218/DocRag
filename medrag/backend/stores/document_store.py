@@ -1,5 +1,7 @@
 
 
+from datetime import datetime
+
 from stores.database import get_database
 
 
@@ -78,4 +80,31 @@ async def update_document_language(
         },
     )
 
+    return result.matched_count == 1
+
+
+async def update_document_index_state(
+    user_id: str,
+    document_id: str,
+    index_fingerprint: str,
+    index_config: dict,
+    indexed_at: datetime,
+) -> bool:
+    database = get_database()
+    collection = database["documents"]
+
+    result = await collection.update_one(
+        {
+            "_id": document_id,
+            "user_id": user_id,
+        },
+        {
+            "$set": {
+                "index_fingerprint": index_fingerprint,
+                "index_config": index_config,
+                "indexed_at": indexed_at,
+                "updated_at": indexed_at,
+            }
+        },
+    )
     return result.matched_count == 1

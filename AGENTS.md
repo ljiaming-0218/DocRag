@@ -1,926 +1,2944 @@
-# DocRAG Agent 项目 Codex 协作规则
+# AGENTS.md
 
-你现在是我的 DocRAG Agent 项目开发助教、代码审查员和大厂实习面试训练官。请严格围绕“把已有 RAG Demo 打磨成可投大模型应用开发实习的工程项目”来协助我。
+## 1. 项目身份
 
-不要一次性重构整个项目，不要随意加入与当前阶段无关的复杂功能。每次只处理一个明确阶段，优先保证已有 RAG 主链路稳定。
+本项目名称为 **DocRAG / MedRAG V2**。
+
+项目当前已经从最初的医学文献问答 Demo 演进为通用文档 RAG Agent。
+
+当前目标不是继续堆叠表面功能，而是逐步升级为：
+
+> 一个具备文档解析、结构化切片、索引版本管理、多文档知识库、混合检索、Rerank、会话记忆、Query Rewrite、Agent Router、离线评估与工程化监控能力的可部署 RAG 系统。
+
+当前项目根目录：
+
+```text
+D:\MedRag
+```
+
+主要源码目录：
+
+```text
+D:\MedRag\medrag
+```
+
+评估目录：
+
+```text
+D:\MedRag\eval
+```
+
+Codex 在本项目中工作时，始终将：
+
+```text
+D:\MedRag
+```
+
+视为项目根目录。
 
 ---
 
-## 一、项目背景
+# 2. 当前项目阶段
 
-项目名称：
+当前项目已经达到：
 
-DocRAG Agent：面向 PDF 文献阅读的 RAG 智能助手。
+> 完整可演示的单文档 RAG 应用
 
-当前项目已有基础 RAG 流程，包括：
+当前不是入门 Demo，但暂时不要描述为“企业级多文档知识库”。
+
+现有能力包括：
 
 * PDF 上传
-* 文本解析
-* 文本切分
-* 向量化
-* 向量检索
-* 大模型回答
-* 引用来源 sources 展示
-* 前端展示
-* 基础在线部署
-
-项目基础功能已经测试完毕。
-
-后续目标是将项目从“能跑的 RAG Demo”升级为“能被大厂实习面试深挖的大模型应用工程项目”。
-
-目标岗位：
-
-* 大模型应用开发实习
-* AI 应用开发实习
-* RAG 开发实习
-* Agent 开发实习
-* AI 后端开发实习
-
-重点面向成都互联网大厂或准大厂。
-
----
-
-## 二、项目定位
-
-项目统一定位为：
-
-DocRAG Agent：面向 PDF 文献阅读的 RAG 智能助手。
-
-不要再将项目固定为“医学文献问答系统”。本项目是通用 PDF 文献问答助手，可用于：
-
-* 学术论文
-* 课程资料
-* 技术文档
-* 项目报告
-* 政策文件
-* 招标文件
-* 医学文献
-
-医学文献只能作为测试样例之一，不能把系统定位写死在医学场景。
-
-如果页面、README、接口描述、提示词、变量命名中出现 MedRAG、医学文献、医学文献问答系统等旧定位，请提醒我统一改成：
-
-* DocRAG
-* 文献问答助手
-* PDF 文献阅读助手
-* 文档知识库问答助手
-
-线上展示页面中不要出现“在 backend 目录运行 uvicorn main:app --reload”这类本地开发提示。线上页面应展示为正式演示版。
-
----
-
-## 三、当前最高优先级
-
-后续开发按下面顺序推进，不要平均用力：
-
-1. 统一项目定位：从 MedRAG 医学文献改成 DocRAG 通用文献问答助手。
-2. 删除线上页面中的本地开发提示。
-3. 增加轻量用户功能：先创建/选择用户，再确定用户类型。
-4. 实现用户隔离：user_id 关联 document、conversation、message。
-5. 实现 document_hash：识别同一用户是否上传过同一份 PDF。
-6. 实现历史会话列表：同一用户上传同一文件时能展示历史对话。
-7. 实现单次对话记忆：同一 conversation 内读取最近 3-5 轮历史。
-8. 实现 Query Rewrite：根据历史将追问改写成适合检索的独立问题。
-9. 确保 assistant 回答对应的 sources 能随 message 保存。
-10. 实现用户分类 Prompt：不同用户类型对应不同回答策略。
-11. 新增 Agent Router，先实现“阅读报告生成”工具。
-12. 构建 RAG 小型评估集。
-13. 补充工程化细节：异常处理、日志、API Key 安全、README、接口文档。
-14. 最后再考虑 rerank、hybrid search、流式输出等加分项。
-
----
-
-## 四、暂时不要优先做的内容
-
-当前 DocRAG 项目暂时不要加入以下内容：
-
-* 多 Agent 协作
-* MCP
-* Skills 文件系统
-* 复杂权限系统
-* 多租户
-* Docker Compose 全家桶
-* 复杂后台管理
-* 联网检索论文
-* 模型微调
-* Text2SQL
-* 岗位 JD 分析或模拟面试
-
-这些内容后续会放在另一个项目 OfferPilot MCP 中。
-
-DocRAG 当前只专注于：
-
-* RAG
-* PDF 文献问答
-* 用户隔离
-* 会话记忆
+* PDF 文本解析
+* OCR fallback
+* 文档切片
+* Embedding
+* Chroma 向量检索
+* CrossEncoder Rerank
 * Query Rewrite
-* 用户分类 Prompt
-* 阅读 Agent
-* RAG 评估
-* 工程化
-
----
-
-## 五、用户功能设计：先创建用户，再确定用户类型
-
-当前阶段应从“单用户演示版”升级为“支持用户隔离和用户画像的文献问答系统”。
-
-建议先实现轻量用户功能，不要一开始做完整登录注册系统。
-
-第一版用户逻辑：
-
-1. 用户进入页面时，先创建用户或选择已有用户。
-2. 用户创建时填写 username。
-3. 用户创建时选择默认 user_type。
-4. 前端用 localStorage 保存当前 user_id。
-5. 后端所有 document、conversation、message 都必须关联 user_id。
-6. 切换用户后，只加载该用户自己的文档和历史对话。
-
-不要先做：
-
-* 密码登录
-* JWT
-* OAuth
-* 手机验证码
-* 复杂权限系统
-
-后续项目正式化时，再扩展登录注册和鉴权。
-
----
-
-## 六、用户类型设计
-
-用户类型应作为用户画像的一部分，而不是每次提问时临时随便传。
-
-建议用户类型：
-
-* undergraduate：本科生
-* graduate_student：研究生
-* researcher：科研人员
-* developer：工程开发者
-* teacher：教师
-* general：普通用户
-
-用户类型作用：
-
-undergraduate：
-少术语，多解释基础概念，语言更通俗。
-
-graduate_student：
-强调研究问题、方法路线、实验设计、创新点和局限性。
-
-researcher：
-强调相关工作、方法贡献、实验设置、可复现性和局限。
-
-developer：
-强调实现流程、技术路线、数据处理、系统落地和工程实现。
-
-teacher：
-强调知识结构、教学讲解、可提问点和课堂表达。
-
-general：
-简洁概括，减少专业细节。
-
----
-
-## 七、用户类型的继承与覆盖规则
-
-用户类型建议分三层：
-
-### 第一层：用户默认类型
-
-users 表中保存 default_user_type。
-
-例如：
-
-* 用户 A 默认是 graduate_student
-* 用户 B 默认是 developer
-
-### 第二层：对话快照类型
-
-conversation 创建时，默认继承当前用户的 default_user_type，并保存为 conversation.user_type。
-
-这样做的好处是：
-
-即使用户之后修改了自己的默认类型，旧对话仍然保持创建时的回答风格，避免历史对话前后不一致。
-
-### 第三层：前端临时回答模式
-
-前端可以做一个类似 ChatGPT / DeepSeek 的“回答模式”选择器。
-
-例如：
-
-* 当前用户：李佳茗
-* 默认身份：研究生
-* 当前对话模式：研究生
-* 可切换为：本科生 / 研究生 / 科研人员 / 工程开发者 / 教师 / 普通用户
-
-当用户切换模式时，前端应提供两种选择：
-
-1. 仅应用到当前对话。
-2. 更新为当前用户的默认类型。
-
-优先级建议：
-
-本次请求显式传入的 user_type
-
-> conversation.user_type
-> user.default_user_type
-> general
-
-也就是：
-
-1. 本次请求临时指定了 user_type，就用本次的。
-2. 如果没有临时指定，就用当前 conversation 的 user_type。
-3. 如果 conversation 没有，就用 user 的 default_user_type。
-4. 如果用户也没有设置，就用 general。
-
----
-
-## 八、用户数据结构建议
-
-users:
-
-* user_id
-* username
-* default_user_type
-* created_at
-* updated_at
-
-documents:
-
-* document_id
-* user_id
-* document_hash
-* filename
-* title
-* created_at
-* updated_at
-
-conversations:
-
+* 多轮会话短期记忆
 * conversation_id
-* user_id
-* document_id
-* document_hash
-* title
-* user_type
-* created_at
-* updated_at
+* 用户级逻辑隔离
+* 历史会话
+* sources 持久化
+* Agent Router
+* QA
+* Summary
+* Term Explanation
+* Reading Report
+* Source Check
+* 用户类型 Prompt
+* MongoDB 数据持久化
+* 异常处理
+* 日志
+* 离线 RAG 评估集
+* Recall / MRR / 引用准确性等指标
+* 自动化测试
 
-messages:
+当前稳定测试基线：
 
-* message_id
-* conversation_id
-* role
-* content
-* rewritten_query
-* sources
-* created_at
+```text
+76 passed
+```
 
-字段含义：
-
-* user_id 用于隔离不同用户。
-* document_id 用于区分不同文档。
-* document_hash 用于识别同一份 PDF。
-* conversation_id 用于区分同一用户在同一文档下的不同对话。
-* user_type 用于控制回答风格。
-* rewritten_query 用于保存 Query Rewrite 结果。
-* sources 必须随 assistant message 保存。
+后续任何修改都不能无理由破坏现有测试基线。
 
 ---
 
-## 九、同一文件历史对话识别
+# 3. 当前核心问题
 
-上传 PDF 时，后端应计算文件 hash，例如 sha256。
+当前 DocRAG 最大短板不是 LLM，而是：
 
-如果用户上传同一份文件，系统应识别：
+```text
+文档处理
+↓
+Chunking
+↓
+索引生命周期
+↓
+多文档知识库
+↓
+Retrieval
+↓
+Evaluation
+```
 
-1. 当前 user_id 是否已经上传过相同 document_hash。
-2. 如果上传过，前端展示该文件对应的历史 conversation 列表。
-3. 用户可以选择继续某个历史对话。
-4. 用户也可以选择基于该文件新建对话。
-5. 不要重复索引相同文件，除非用户明确选择重新索引。
+当前开发优先级：
 
-建议流程：
+```text
+P0
+切片 V2
+索引版本管理
+多文档知识库
+Chunk 级评估
 
-用户上传 PDF
-→ 后端计算 document_hash
-→ 根据 user_id + document_hash 查询是否已有 document
-→ 如果已有，返回 existing_document=true 和历史 conversation 列表
-→ 前端展示“检测到该文件已有历史对话”
-→ 用户选择继续历史对话或新建对话
+P1
+结构感知 PDF 解析
+Hybrid Retrieval
+文档处理状态
+认证系统
 
-返回结构参考：
+P2
+VectorStore 抽象
+容量测试
+Batch Embedding
+模型延迟加载
+DTO 化
+工程质量优化
+```
 
-```json
-{
-  "document_id": "xxx",
-  "document_hash": "xxx",
-  "existing_document": true,
-  "conversations": [
-    {
-      "conversation_id": "xxx",
-      "title": "关于本文方法的讨论",
-      "updated_at": "2026-xx-xx"
-    }
-  ]
-}
+禁止跳过 P0，直接为了“技术看起来高级”去做 P2。
+
+---
+
+# 4. Codex 总体工作原则
+
+在任何代码修改之前：
+
+1. 读取当前目标文件。
+2. 搜索对应调用链。
+3. 查看相关测试。
+4. 检查配置。
+5. 查看数据结构。
+6. 判断修改影响范围。
+7. 给出简短实施方案。
+8. 再修改代码。
+
+默认工作流程：
+
+```text
+Inspect
+↓
+Plan
+↓
+Implement
+↓
+Test
+↓
+Stabilize
+↓
+Continue Phase
+↓
+Phase Evaluation
+```
+
+禁止：
+
+* 没有读取代码就直接重写。
+* 为了解决局部问题进行大面积重构。
+* 无理由替换已有技术栈。
+* 同时修改多个核心变量。
+* 删除稳定功能以换取实现方便。
+* 为了“企业级”盲目引入复杂组件。
+* 为了部署免费平台删除 Rerank 等核心能力。
+* 为了赶进度跳过测试。
+
+---
+
+# 5. 当前开发策略
+
+当前采用：
+
+> Implementation First → Stabilization → Evaluation
+
+即：
+
+```text
+先完成一个完整 Phase
+↓
+保证代码和测试稳定
+↓
+再统一进行实验验证
+```
+
+不要每修改一个小功能就运行完整 RAG 实验。
+
+开发过程中主要进行：
+
+```text
+Code
++
+Unit Tests
++
+Integration Tests
++
+Regression Tests
+```
+
+阶段完成后再进行：
+
+```text
+Offline RAG Evaluation
 ```
 
 ---
 
-## 十、会话记忆设计要求
+# 6. 测试与实验必须区分
 
-DocRAG 必须真实落地会话记忆，而不是只在页面上写概念。
+下面属于工程测试：
 
-需要实现或检查以下能力：
+```text
+pytest
+```
 
-1. 每次上传文献生成 document_id。
-2. 每次新建问答生成 conversation_id。
-3. 每轮用户问题保存成 user message。
-4. 每轮模型回答保存成 assistant message。
-5. assistant message 必须保存 sources。
-6. 刷新页面后能恢复历史消息。
-7. 用户追问时能读取最近几轮历史。
-8. 不要把全部历史无限塞进 prompt。
-9. 第一版只取最近 3-5 轮作为短期上下文。
-10. 回答事实性问题时，仍然以当前问题检索到的文献片段作为主要依据。
-11. 如果历史和文献检索结果冲突，以文献检索结果为准。
+下面属于效果实验：
 
-面试表达要点：
+```text
+Fixed vs Recursive
+Dense vs Hybrid
+Recall@K
+MRR
+nDCG
+Citation Accuracy
+Faithfulness
+```
 
-我没有把所有历史都塞进 Prompt，而是只取最近几轮对话作为短期上下文；历史用于理解当前问题，文献检索结果才是事实依据。
+开发过程中可以频繁运行测试。
+
+不要频繁运行完整 RAG 实验。
+
+当前基线：
+
+```text
+76 passed
+```
+
+已有测试出现 regression 时：
+
+```text
+禁止宣布任务完成
+```
+
+必须定位并修复。
 
 ---
 
-## 十一、Query Rewrite 设计
+# 7. 当前 V2 Roadmap
 
-为支持多轮追问，需要新增 Query Rewrite 模块。
+严格按以下阶段推进。
+
+## Phase 1
+
+```text
+Chunking V2
++
+Index Versioning
+```
+
+包含：
+
+```text
+fixed strategy
+recursive strategy
+chunk metadata
+index fingerprint
+force_reindex
+相关测试
+```
+
+阶段稳定之后：
+
+```text
+统一运行 Fixed vs Recursive 实验
+```
+
+---
+
+## Phase 2
+
+```text
+Knowledge Base
++
+Multi-document Retrieval
+```
+
+包含：
+
+```text
+knowledge_bases
+kb_id
+多文档上传
+知识库级检索
+指定文档范围检索
+用户隔离
+前端知识库管理
+```
+
+阶段稳定后：
+
+```text
+统一验证多文档检索
+```
+
+---
+
+## Phase 3
+
+```text
+Hybrid Retrieval
+```
+
+包含：
+
+```text
+Dense Retrieval
+BM25 / Sparse Retrieval
+RRF
+Candidate Dedup
+CrossEncoder Rerank
+Evidence Threshold
+```
+
+阶段稳定后统一对比：
+
+```text
+Dense
+
+Dense + Rerank
+
+Hybrid + RRF + Rerank
+```
+
+---
+
+## Phase 4
+
+```text
+Document Processing Engineering
+```
+
+包含：
+
+```text
+processing status
+failure state
+batch embedding
+batch vector write
+retry
+layout metadata
+logging
+observability
+```
+
+---
+
+## Phase 5
+
+```text
+Capacity Benchmark
++
+VectorStore Decision
+```
+
+规模：
+
+```text
+10K chunks
+100K chunks
+500K chunks
+```
+
+记录：
+
+```text
+index time
+write throughput
+P50
+P95
+P99
+memory
+disk
+concurrency error
+```
+
+达到真实瓶颈后再考虑：
+
+```text
+Qdrant
+Milvus
+```
+
+---
+
+# 8. 当前立即执行任务
+
+现在只执行：
+
+```text
+Phase 1
+```
+
+当前第一主线：
+
+```text
+Chunking V2
++
+Index Versioning
+```
+
+重点文件：
+
+```text
+medrag/backend/services/text_splitter_service.py
+medrag/backend/services/document_ingestion_service.py
+medrag/backend/services/vector_store_service.py
+tests/
+eval/
+```
+
+当前阶段不要主动修改：
+
+```text
+Knowledge Base
+Hybrid Retrieval
+Vector Database
+Frontend 大改
+GraphRAG
+Multi-Agent
+```
+
+---
+
+# 9. 当前切片问题
+
+重点检查：
+
+```text
+medrag/backend/services/text_splitter_service.py
+```
+
+当前 fixed splitter 本质类似：
+
+```python
+text[i:i + chunk_size]
+```
+
+存在问题：
+
+* 截断句子。
+* 截断段落。
+* 截断标题。
+* 截断表格。
+* 无法识别章节。
+* 跨页内容处理较弱。
+* chunk 缺少结构化 metadata。
+
+当前 fixed splitter 必须保留。
+
+原因：
+
+> Fixed Chunk 是后续效果对比的 baseline。
+
+禁止直接删除 fixed。
+
+---
+
+# 10. Chunk Strategy 设计
+
+当前需要设计统一切片接口。
+
+推荐策略：
+
+```text
+fixed
+recursive
+```
+
+未来再扩展：
+
+```text
+structure
+parent_child
+semantic
+```
+
+但当前 Phase 1 只实现：
+
+```text
+fixed
+recursive
+```
+
+---
+
+# 11. Chunk 数据结构
+
+推荐逐步统一 Chunk 数据结构。
+
+建议字段：
+
+```text
+chunk_id
+document_id
+user_id
+text
+page_start
+page_end
+start_char
+end_char
+section_title
+strategy
+chunk_size
+chunk_overlap
+chunk_version
+parent_chunk_id
+metadata
+```
+
+第一阶段至少稳定提供：
+
+```text
+text
+page_start
+page_end
+start_char
+end_char
+strategy
+chunk_version
+```
+
+不是所有未来字段都必须在第一轮实现。
+
+不要为了追求一次性完整而过度设计。
+
+---
+
+# 12. Fixed Strategy
+
+保留现有：
+
+```text
+strategy = fixed
+```
 
 作用：
 
-将用户的当前追问，结合最近几轮历史，改写成一个更完整、适合检索的独立问题。
+```text
+Regression Baseline
+Retrieval Baseline
+Chunking Baseline
+```
 
-示例：
+Fixed 的现有语义应尽量保持不变。
 
-历史：
-用户：这篇论文主要提出了什么方法？
-助手：本文提出了一种基于 Transformer 的文献问答方法。
+新增 Recursive 不能导致 Fixed 出现非预期行为变化。
 
-当前问题：
-它的创新点是什么？
+---
 
-改写后：
-这篇论文提出的基于 Transformer 的文献问答方法有哪些创新点？
+# 13. Recursive Strategy
 
-新增函数建议：
-
-rewrite_query(conversation_id: str, query: str) -> str
-
-输入：
-
-* conversation_id
-* 当前 query
-* 最近几轮历史消息
-
-输出：
-
-* rewritten_query
-
-要求：
-
-1. Query Rewrite 只用于检索，不直接替代用户原始问题展示。
-2. 前端仍展示用户原始问题。
-3. 后端保存 rewritten_query，便于调试和评估。
-4. 如果用户问题已经足够完整，可以保持原问题不变。
-5. Query Rewrite 不能引入文献中没有的信息。
-6. Query Rewrite Prompt 要求模型只补全指代和上下文，不要扩展事实。
-7. rewritten_query 用于向量检索。
-8. 原始 query 用于前端展示和消息保存。
-
-Query Rewrite Prompt 参考：
+新增：
 
 ```text
-你是一个 RAG 检索查询改写助手。
-你的任务是根据最近对话历史，将用户当前问题改写成一个完整、清晰、适合文献检索的独立问题。
-
-要求：
-1. 只补全必要的指代和上下文。
-2. 不要添加对话中没有出现的新事实。
-3. 不要回答问题。
-4. 如果当前问题已经完整，直接返回原问题。
-5. 输出只包含改写后的问题。
-
-最近对话：
-{history}
-
-用户当前问题：
-{query}
-
-改写后的问题：
+strategy = recursive
 ```
 
----
-
-## 十二、加入用户、记忆和 Query Rewrite 后的问答流程
-
-新的 /ask 流程应调整为：
-
-1. 获取 user_id、conversation_id、document_id、query、user_type。
-2. 校验 conversation 是否属于当前 user_id。
-3. 保存用户原始问题。
-4. 读取当前 conversation 最近 3-5 轮历史。
-5. 使用 Query Rewrite 将当前问题改写为 rewritten_query。
-6. 使用 rewritten_query 进行向量检索。
-7. 获取相关 chunks 和 sources。
-8. 根据 user_type、历史上下文、检索 chunks 组装 prompt。
-9. 调用大模型生成回答。
-10. 保存 assistant message，包括 answer、sources、rewritten_query。
-11. 返回 answer、sources、conversation_id、rewritten_query。
-
-注意：
-
-* 原始 query 用于前端展示。
-* rewritten_query 用于检索和调试。
-* sources 用于答案追溯。
-* history 用于理解上下文，但不能替代文献依据。
-* 如果检索不到相关内容，应明确提示“根据当前文献内容无法确定”，不要编造。
-
----
-
-## 十三、用户分类 Prompt 要求
-
-Prompt 中需要明确加入当前用户类型和回答要求。
-
-示例：
+推荐优先级：
 
 ```text
-当前用户类型：研究生。
-
-回答要求：
-请重点说明研究问题、方法路线、实验设计、创新点和局限性。
-
-请只根据检索到的文献片段回答。
-如果当前文献内容不足以回答，请说明“根据当前文献内容无法确定”，不要编造。
+\n\n
+↓
+\n
+↓
+。！？；
+↓
+.!?;
+↓
+空格
+↓
+字符
 ```
 
-后端请求结构可参考：
+目标是尽量保持：
 
-```json
-{
-  "user_id": "xxx",
-  "document_id": "xxx",
-  "conversation_id": "xxx",
-  "user_type": "graduate_student",
-  "query": "总结这篇文献的方法"
-}
+```text
+章节
+段落
+句子
 ```
+
+完整。
+
+只有上一级 separator 无法将文本控制到目标长度时，才继续向下递归。
+
+必须支持：
+
+* 中文。
+* 英文。
+* 中英文混排。
+* 无标点文本。
+* 超长句子。
+* 极短文本。
+* 多段落。
+* 多章节。
 
 ---
 
-## 十四、Agent Router 设计要求
+# 14. Chunk Overlap
 
-当前只做单 Agent + 多工具，不要做复杂多 Agent。
+Fixed 和 Recursive 都要正确处理：
 
-Agent Router 第一版可以用规则实现，不必一开始就让 LLM 自主规划。
-
-建议工具：
-
-1. qa_tool：普通文献问答。
-2. summary_tool：生成文献摘要。
-3. term_tool：提取关键词和术语。
-4. report_tool：生成阅读报告。
-5. source_check_tool：引用检查或证据检查。
-
-Router 第一版规则：
-
-* 用户问题包含“总结、摘要、概括” → summary_tool
-* 用户问题包含“术语、关键词、概念” → term_tool
-* 用户问题包含“阅读报告、分析这篇文献” → report_tool
-* 用户问题包含“依据、出处、引用、来源” → source_check_tool
-* 其他情况 → qa_tool
-
-第二版可以升级为 LLM 输出 JSON，例如：
-
-```json
-{
-  "task": "report",
-  "reason": "用户要求生成阅读报告"
-}
+```text
+chunk_overlap
 ```
 
-Agent 的核心表达是：
+Overlap 必须：
 
-基础 RAG 是固定流程，不管用户问什么都走“检索 + 回答”；Agent 版增加任务识别和工具选择能力，可以根据用户意图选择问答、摘要、术语提取、阅读报告等工具。所有工具底层仍然依赖文档检索和 sources，避免模型脱离原文生成。
+* 不大于 chunk_size。
+* 不产生无限循环。
+* 不产生大量重复 chunk。
+* 不导致空 chunk。
+* 不破坏 metadata。
+
+必须增加边界校验。
+
+例如：
+
+```text
+chunk_overlap >= chunk_size
+```
+
+需要明确处理。
 
 ---
 
-## 十五、阅读报告工具要求
+# 15. Chunking Tests
 
-优先实现 report_tool，即“阅读报告生成工具”。
+新增或完善：
 
-输入：
+```text
+tests/test_text_splitter_service.py
+```
 
-* document_id
-* conversation_id
-* user_type
-* query
-* top_k
+至少覆盖：
 
-输出结构建议：
+## Case 1
 
-1. 文献主题
-2. 研究背景
-3. 研究问题
-4. 方法路线
-5. 实验设计或案例
-6. 主要结论
-7. 创新点
-8. 局限性
-9. 适合继续追问的问题
-10. 引用来源 sources
+中文普通段落。
+
+验证：
+
+* chunk 非空。
+* 长度合理。
+* Recursive 尽量不截断句子。
+
+## Case 2
+
+英文论文摘要。
+
+验证英文标点边界。
+
+## Case 3
+
+中英文混排。
+
+例如：
+
+```text
+RAG 的核心是 Retrieval-Augmented Generation。
+The retriever retrieves relevant chunks.
+```
+
+## Case 4
+
+超长单句。
+
+验证最终字符 fallback。
+
+## Case 5
+
+多个章节。
+
+例如：
+
+```text
+1 Introduction
+
+...
+
+2 Related Work
+
+...
+```
+
+## Case 6
+
+跨页内容。
+
+允许：
+
+```text
+page_start != page_end
+```
+
+## Case 7
+
+表格文本。
+
+至少避免明显破坏整行。
+
+## Case 8
+
+空字符串。
+
+## Case 9
+
+文本长度小于 chunk_size。
+
+## Case 10
+
+非法 overlap。
+
+---
+
+# 16. 索引版本管理
+
+重点检查：
+
+```text
+medrag/backend/services/document_ingestion_service.py
+```
+
+当前禁止继续使用：
+
+```text
+发现已有 chunks
+=
+永远跳过索引
+```
+
+作为最终逻辑。
+
+原因：
+
+未来修改：
+
+```text
+Chunk Strategy
+Embedding Model
+Chunk Size
+Chunk Overlap
+Chunk Version
+```
+
+都可能使已有索引过期。
+
+---
+
+# 17. Index Fingerprint
+
+需要设计：
+
+```text
+index_fingerprint
+```
+
+推荐包含：
+
+```text
+chunk_strategy
+chunk_size
+chunk_overlap
+chunk_version
+embedding_model
+embedding_version
+index_version
+```
+
+逻辑类似：
+
+```python
+fingerprint = hash(
+    chunk_strategy
+    + chunk_size
+    + chunk_overlap
+    + chunk_version
+    + embedding_model
+    + embedding_version
+    + index_version
+)
+```
 
 要求：
 
-1. 必须基于检索片段生成。
-2. 必须返回 sources。
-3. 如果文献中没有相关内容，要标注“当前文献未提及”。
-4. 不要生成没有来源依据的结论。
-5. 不同 user_type 下，阅读报告侧重点可以不同。
-
----
-
-## 十六、前端设计要求
-
-前端需要支持与用户关联的历史文档和历史对话列表。
-
-建议前端布局：
-
-左侧：
-
-* 当前用户信息
-* 新建用户或切换用户
-* 当前用户类型 / 回答模式
-* 已上传文档列表
-* 当前文档下的历史对话列表
-* 新建对话按钮
-
-中间：
-
-* 当前 conversation 的消息记录
-* user 消息
-* assistant 消息
-* sources 引用来源
-
-底部：
-
-* 当前问题输入框
-* 回答模式选择
-* 发送按钮
-
-用户上传同一份文件时：
-
-1. 如果后端返回 existing_document=true，前端提示“检测到该文件已有历史对话”。
-2. 展示该文件对应的历史 conversation 列表。
-3. 用户可以点击某个历史 conversation 继续对话。
-4. 用户也可以点击“基于该文档新建对话”。
-
-前端注意事项：
-
-1. 不要只把历史保存在 localStorage。
-2. localStorage 只能保存当前 user_id 或临时配置。
-3. 历史文档、历史 conversation、历史 messages 应以后端数据库为准。
-4. 前端展示用户原始 query，不展示 rewritten_query，除非在调试模式下显示。
-5. sources 要能展开查看。
-6. 刷新页面后要能恢复历史会话列表和当前会话消息。
-
----
-
-## 十七、新增接口建议
-
-不要一次性大改所有接口。优先新增以下接口：
-
-POST /users
-创建或获取用户。
-
-GET /users/{user_id}/documents
-获取该用户上传过的文档列表。
-
-GET /users/{user_id}/documents/{document_id}/conversations
-获取该用户在某个文档下的历史对话。
-
-POST /conversations
-基于 user_id 和 document_id 新建对话。
-
-GET /conversations/{conversation_id}/messages
-获取某个会话的消息历史。
-
-POST /conversations/{conversation_id}/ask
-在指定会话中继续提问，包含 Query Rewrite、检索、回答、保存消息。
-
-POST /pdf/index
-保留原接口，但需要支持 user_id，并在上传时计算 document_hash，判断是否为同一用户上传过的同一文件。
-
-接口设计要求：
-
-1. 新增接口前先说明接口输入、输出和影响范围。
-2. 不要破坏已有前端可用功能。
-3. 如果修改已有接口，需要说明前端是否需要同步修改。
-4. 优先保证旧的 RAG 主链路稳定。
-
----
-
-## 十八、本阶段验收标准
-
-完成用户隔离、对话记忆、用户分类和 Query Rewrite 后，应满足：
-
-1. 可以创建或选择用户。
-2. 每个用户有自己的默认 user_type。
-3. 不同 user_id 的历史文档和历史对话互相隔离。
-4. 同一用户上传同一份 PDF 时，系统能识别历史文档。
-5. 前端能展示该文件关联的历史 conversation 列表。
-6. 用户可以继续历史对话。
-7. 用户可以基于同一文档新建对话。
-8. 同一个 conversation 内支持最近 3-5 轮短期记忆。
-9. 追问类问题会先经过 Query Rewrite 再检索。
-10. assistant 回答保存 sources。
-11. 刷新页面后，历史文档、历史会话和历史消息仍然存在。
-12. 前端不直接暴露 API Key。
-13. 前端展示用户原始问题。
-14. 后端保存 rewritten_query 以供调试和评估。
-15. 用户类型能真实影响回答风格。
-16. 如果用户问文献中没有的问题，系统能明确回答“根据当前文献内容无法确定”。
-
----
-
-## 十九、RAG 评估集要求
-
-请帮助我建立小型评估集，而不是只做功能。
-
-评估集规模：
-
-3 篇 PDF，每篇 5 个问题，共 15 个问题。
-
-问题类型：
-
-1. 事实型：文中明确有答案。
-2. 总结型：需要归纳多个片段。
-3. 无答案型：文中没有依据。
-4. 术语型：解释某个概念。
-5. 对比型：比较方法或结论。
-6. 追问型：依赖历史上下文，需要 Query Rewrite。
-
-评估字段建议：
-
-* question
-* rewritten_query
-* gold_answer
-* system_answer
-* retrieved_chunks
-* source_page
-* retrieval_score
-* query_rewrite_score
-* answer_score
-* faithfulness_score
-* has_hallucination
-* comment
-
-人工评分建议：
-
-* 检索相关性：0-2 分
-* Query Rewrite 是否合理：0-2 分
-* 答案忠实度：0-2 分
-* 引用准确性：0-2 分
-* 是否幻觉：是/否
-
-建议建立 eval 目录：
-
-eval/
-
-* docrag_eval_questions.json
-* docrag_eval_result.md
-* eval_template.xlsx 或 eval_template.csv
-
-面试时需要能说明：
-
-我不仅实现了 RAG，还构建了小型评估集，从检索相关性、Query Rewrite 效果、答案忠实度、引用准确性和幻觉控制角度评估系统效果。
-
----
-
-## 二十、工程化要求
-
-请帮助我补充工程化细节，不要让接口直接 500 崩溃。
-
-至少处理以下异常：
-
-1. PDF 解析为空。
-2. 扫描版 PDF 无法提取文字。
-3. chunk 数为 0。
-4. embedding 失败。
-5. 向量库写入失败。
-6. 检索无结果。
-7. LLM API 超时。
-8. 用户问题超出文献范围。
-9. document_id 不存在。
-10. conversation_id 不存在。
-11. user_id 不存在。
-12. document 不属于当前 user_id。
-13. conversation 不属于当前 user_id。
-14. sources 为空。
-15. Query Rewrite 失败。
-
-统一错误返回格式建议：
-
-```json
-{
-  "error": "PDF_TEXT_EMPTY",
-  "message": "该 PDF 未解析出可用文本，可能是扫描版文件。"
-}
+```text
+old_fingerprint == new_fingerprint
 ```
 
-日志建议记录：
+才可以安全复用索引。
 
-* user_id
-* 上传文件名
-* document_id
-* document_hash
-* conversation_id
-* chunk 数量
-* embedding 耗时
-* 检索 top_k
-* 原始 query
-* rewritten_query
-* LLM 调用耗时
-* 工具类型
-* 错误堆栈
+如果：
 
-API Key 安全要求：
+```text
+old_fingerprint != new_fingerprint
+```
 
-1. API Key 只能放在后端环境变量。
-2. 前端不能出现任何 API Key。
-3. 前端只请求后端接口。
-4. 后端读取环境变量后再调用大模型服务。
-
-建议补充接口：
-
-GET /health
-
-用于确认服务是否正常运行。
+需要重新索引。
 
 ---
 
-## 二十一、README 要求
+# 18. Index Version
 
-请帮助我逐步完善 README，至少包括：
+需要维护显式：
 
-1. 项目背景
-2. 功能列表
-3. 技术栈
-4. 系统架构
-5. RAG 流程
-6. 用户创建与用户隔离设计
-7. Memory 设计
-8. Query Rewrite 设计
-9. 用户分类 Prompt 设计
-10. Agent Router 设计
-11. 接口文档
-12. 评估集设计与结果
-13. 部署说明
-14. 常见问题
-15. 项目不足
-16. 后续优化
+```text
+index_version
+```
 
-README 中的项目描述建议：
+Index Version 代表整体索引 schema 或索引流程版本。
 
-本项目是一个面向 PDF 文献阅读的 RAG 智能助手，支持 PDF 文档解析、文本切分、向量化存储、语义检索、引用来源展示和大模型问答。在基础 RAG 链路上，系统进一步加入 user_id 用户隔离、document_hash 文档去重识别、conversation_id 与 message 存储机制，实现用户级历史文档管理、文档级历史会话管理和短期会话记忆；通过 Query Rewrite 机制将多轮追问改写为适合检索的独立问题，提高多轮 RAG 检索效果；通过用户默认类型、对话回答模式和 user_type Prompt 提供本科生、研究生、科研人员、工程开发者等不同回答策略；通过 Agent Router 支持普通问答、文献摘要、术语提取和阅读报告生成。项目构建小型评估集，从检索相关性、Query Rewrite 效果、答案忠实度、引用准确性和幻觉控制等维度评估系统效果，并部署至 Hugging Face Space 进行在线演示。
+例如：
 
----
+```text
+index_version = v1
+```
 
-## 二十二、面试表达重点
+未来修改核心索引逻辑后：
 
-完成当前阶段后，需要能讲清楚以下问题：
+```text
+index_version = v2
+```
 
-1. 为什么要引入 user_id？
-   回答要点：用于隔离不同用户的数据，避免历史文档和历史会话混淆，也便于后续扩展权限系统和个性化设置。
-
-2. 为什么用户分类要先挂在用户上，而不是每次提问临时选择？
-   回答要点：用户类型本质是用户画像的一部分，先绑定用户可以保证体验一致；同时允许当前对话临时切换回答模式，兼顾稳定性和灵活性。
-
-3. 为什么 conversation 里也要保存 user_type？
-   回答要点：conversation 保存的是创建对话时的回答风格快照，避免用户后来修改默认类型后影响旧对话。
-
-4. 为什么要引入 document_hash？
-   回答要点：用于判断用户是否上传过同一份文件，避免重复索引，也便于展示同一文档下的历史对话。
-
-5. 多轮 RAG 中为什么需要 Query Rewrite？
-   回答要点：用户追问常包含“它”“这个方法”等指代，直接检索效果差。Query Rewrite 可以结合历史将问题改成独立、完整的检索查询，提高召回相关性。
-
-6. 为什么不能把所有历史都放进 prompt？
-   回答要点：历史过长会增加 token 成本、超过上下文窗口，并可能引入无关信息干扰回答。更合理的做法是取最近几轮，后续可以做摘要记忆。
-
-7. 历史记忆和文献检索内容谁优先？
-   回答要点：历史用于理解当前问题，文献检索结果是事实依据。如果二者冲突，应以文献 sources 为准。
-
-8. 用户分类有什么意义？
-   回答要点：不同用户对文献理解需求不同。通过 user_type 调整 Prompt，可以让系统对本科生、研究生、科研人员、工程开发者等提供不同粒度和侧重点的回答。
-
-9. Agent Router 和普通 RAG 有什么区别？
-   回答要点：普通 RAG 是固定流程，Agent Router 会根据用户意图选择问答、摘要、术语、阅读报告等不同工具，提升任务适配能力。
-
-10. 你怎么证明 RAG 效果好？
-    回答要点：通过小型评估集，从检索相关性、Query Rewrite 效果、答案忠实度、引用准确性和幻觉控制等维度进行人工评估。
+不要只依赖代码变化判断。
 
 ---
 
-## 二十三、每次协助我的工作方式
+# 19. Chunk Version
 
-每次回答都请遵守以下结构：
+Chunk Strategy 需要：
 
-1. 当前阶段判断
-   判断我现在处于哪个阶段，例如：定位统一、用户创建、用户隔离、会话记忆、Query Rewrite、用户分类、Agent Router、评估集、工程化、README。
+```text
+chunk_version
+```
 
-2. 本次任务目标
-   用一句话说明这次要解决什么问题。
+例如：
 
-3. 修改建议
-   先解释为什么要这样改，再给具体修改方案。
+```text
+fixed:v1
+recursive:v1
+```
 
-4. 最小改动代码
-   如果需要写代码，只给当前任务所需的最小改动，不要一次性重写整个项目。
+未来 Recursive 算法改变：
 
-5. 自查清单
-   告诉我完成后应该检查什么。
+```text
+recursive:v2
+```
 
-6. 面试追问
-   每次最后给我 3-5 个和当前阶段有关的大模型应用开发 / RAG / Agent 面试问题，并给参考回答要点。
-
-   面试题来源要求：
-
-   * 优先参考牛客等公开平台的大厂大模型应用开发、RAG、Agent 和 AI 后端真实面经。
-   * 可以结合 DocRAG 当前实现进行项目化改写，但不得把改写题冒充成面经原题。
-   * 适当标注面经对应的公司、岗位或来源链接，无法核实时要明确说明。
-   * 优先选择项目深挖、数据隔离、会话记忆、检索设计、FastAPI 工程化和异常处理等实际岗位问题，不要用泛泛的教学检查题代替面试追问。
-   * 用户回答面试题后，必须逐题评价正确性、指出遗漏或不准确之处，并给出一份完整、可在面试中直接复述的参考答案；不能只说“正确”“不完整”或只给零散要点。
-
-7. 下一步思路
-   告诉我下一步最应该做什么，为什么。
+即可触发重新索引。
 
 ---
 
-## 二十四、代码修改原则
+# 20. Embedding Version
 
-1. 不要一次性重构整个项目。
-2. 不要随意删除已有可运行功能。
-3. 改前先说明影响范围。
-4. 每次只完成一个小阶段。
-5. 优先保证现有 RAG 主链路稳定。
-6. 新功能要尽量复用已有 /pdf/index、/pdf/search、/pdf/answer 或已有 service。
-7. 新增接口前要先说明接口设计。
-8. 修改前端时，不要随便改后端接口。
-9. 修改后端时，要保证前端调用不被破坏。
-10. 如果发现线上页面与本地页面不一致，要提醒我同步部署。
-11. 用户创建、用户隔离、会话记忆、Query Rewrite、用户分类、Agent Router 要分阶段实现，不要一次全改。
-12. 涉及数据库结构变更时，要先说明新增表或字段，并考虑旧数据兼容。
-13. 涉及用户隔离时，必须检查 user_id 权限关系，避免用户看到其他用户的历史记录。
-14. 涉及 Query Rewrite 时，必须保存原始 query 和 rewritten_query，便于调试。
-15. 涉及用户类型时，要区分 user.default_user_type、conversation.user_type 和本次请求传入的 user_type。
+Embedding 模型属于索引的一部分。
+
+修改：
+
+```text
+embedding model
+```
+
+必须认为旧索引可能失效。
+
+原因：
+
+```text
+Chunk
+↓
+Embedding Model
+↓
+Vector Space
+```
+
+不同模型产生的向量空间不能直接视为同一索引。
+
+Index Fingerprint 必须包含：
+
+```text
+embedding_model
+```
+
+必要时还包含：
+
+```text
+embedding_revision
+embedding_dimension
+```
 
 ---
 
-## 二十五、简历导向
+# 21. Force Reindex
 
-请始终按大厂实习面试导向帮我做项目。这个项目最终要服务于：
+需要支持：
 
-* 大模型应用开发实习
-* AI 应用开发实习
-* RAG 开发实习
-* Agent 开发实习
-* AI 后端开发实习
+```text
+force_reindex
+```
 
-项目最终简历描述不能夸大未完成内容。已经实现的功能可以写，规划中的功能不要写成已完成。
+语义：
 
-请持续提醒我：
+```text
+force_reindex = false
+```
 
-功能不是越多越好，关键是能演示、能讲清楚架构、能说明工程取舍、能回答面试追问、能展示评估结果。
+执行正常 fingerprint 判断。
+
+```text
+force_reindex = true
+```
+
+忽略旧索引状态，强制重建。
+
+不要依赖：
+
+```text
+delete database manually
+```
+
+来完成重新索引。
 
 ---
 
-## 二十六、本阶段最短行动顺序
+# 22. Phase 1 开发顺序
 
-当前基础功能已经测试完毕，下一步按以下顺序推进：
+严格按以下顺序：
 
-1. 增加轻量用户功能，支持创建或选择用户。
-2. 用户创建时设置 default_user_type。
-3. 前端保存当前 user_id。
-4. 给 document、conversation、message 关联 user_id。
-5. 上传 PDF 时计算 document_hash。
-6. 同一用户上传同一文件时返回历史 conversation 列表。
-7. 前端展示与用户关联的文档列表和历史对话列表。
-8. 新建 conversation 时继承 user.default_user_type，保存为 conversation.user_type。
-9. 支持当前对话临时切换回答模式。
-10. 实现 conversation 内最近 3-5 轮短期记忆。
-11. 加入 Query Rewrite，将追问改写为独立检索问题。
-12. 保存 original query、rewritten_query、answer、sources。
-13. 再继续做 Agent Router 和阅读报告工具。
+```text
+Step 1
+读取当前 text_splitter_service.py
+
+Step 2
+搜索 splitter 所有调用点
+
+Step 3
+确认当前 chunk 数据结构
+
+Step 4
+设计统一 Chunk Strategy 接口
+
+Step 5
+保留 Fixed
+
+Step 6
+实现 Recursive
+
+Step 7
+增加 Chunk Metadata
+
+Step 8
+补充 Chunk Tests
+
+Step 9
+运行相关测试
+
+Step 10
+实现 Index Fingerprint
+
+Step 11
+实现 force_reindex
+
+Step 12
+补充 ingestion/index tests
+
+Step 13
+运行全量 pytest
+
+Step 14
+修复 Regression
+
+Step 15
+确认 Phase 1 工程功能完整
+
+Step 16
+再统一进行 Phase 1 Evaluation
+```
+
+不要做到 Recursive 后就停下来跑完整实验。
+
+---
+
+# 23. Phase 1 完成定义
+
+Phase 1 必须完成：
+
+```text
+Fixed 可用
++
+Recursive 可用
++
+统一接口
++
+Metadata
++
+Index Fingerprint
++
+force_reindex
++
+单元测试
++
+全量测试通过
+```
+
+然后才进入：
+
+```text
+Phase 1 Evaluation
+```
+
+---
+
+# 24. Phase 1 实验
+
+Phase 1 开发完成后统一验证：
+
+```text
+Fixed
+vs
+Recursive
+```
+
+实验时保持：
+
+```text
+相同 Evaluation Dataset
+相同 Embedding
+相同 Reranker
+相同 Query Rewrite
+相同 LLM
+相同 Prompt
+相同 Retrieval Top-K
+```
+
+唯一核心变量：
+
+```text
+chunk_strategy
+```
+
+评估：
+
+```text
+Recall@3
+Recall@5
+MRR
+Citation Accuracy
+Evidence Recall
+Answer Accuracy
+```
+
+开发阶段不要频繁执行这些实验。
+
+---
+
+# 25. Parent-Child Chunk
+
+Parent-Child 属于后续阶段。
+
+当前不要实现。
+
+未来设计原则：
+
+```text
+Child
+=
+Retrieval Unit
+
+Parent
+=
+Context Unit
+```
+
+例如：
+
+```text
+Parent 1200 tokens
+Child 300 tokens
+```
+
+流程：
+
+```text
+Query
+↓
+Retrieve Child
+↓
+parent_chunk_id
+↓
+Return Parent
+```
+
+目的：
+
+```text
+Retrieval Precision
++
+Context Completeness
+```
+
+---
+
+# 26. Semantic Chunk
+
+Semantic Chunk 暂时只作为后续实验候选。
+
+不要作为默认方案。
+
+原因：
+
+* 成本更高。
+* 需要 Embedding。
+* Threshold 敏感。
+* Index 时间增加。
+* 行为更难解释。
+* 未必比 Recursive 更好。
+
+只有后续实验明确证明收益后再考虑。
+
+---
+
+# 27. Phase 2：Knowledge Base
+
+Phase 1 完成后进入：
+
+```text
+Knowledge Base
++
+Multi-document Retrieval
+```
+
+资源层级：
+
+```text
+User
+└── KnowledgeBase
+    ├── Document
+    │   └── Chunk
+    └── Conversation
+```
+
+新增：
+
+```text
+knowledge_bases
+```
+
+建议字段：
+
+```text
+kb_id
+user_id
+name
+description
+created_at
+updated_at
+```
+
+---
+
+# 28. Document 与 KB 关系
+
+Document 增加：
+
+```text
+kb_id
+```
+
+Chunk 增加：
+
+```text
+kb_id
+```
+
+Conversation 可增加：
+
+```text
+kb_id
+```
+
+最终实现：
+
+```text
+一个用户
+↓
+多个知识库
+↓
+每个知识库多个文档
+```
+
+---
+
+# 29. Retrieval Filter 升级
+
+当前：
+
+```text
+user_id + document_id
+```
+
+未来：
+
+```text
+user_id
++
+kb_id
++
+optional document_ids
+```
+
+语义：
+
+```text
+document_ids = None
+```
+
+代表：
+
+> 检索整个知识库。
+
+指定：
+
+```text
+document_ids = [...]
+```
+
+代表：
+
+> 只检索选择的文档。
+
+任何情况下：
+
+```text
+user_id
+```
+
+都不能移除。
+
+---
+
+# 30. 多文档知识库功能
+
+Phase 2 目标至少支持：
+
+* 创建知识库。
+* 删除知识库。
+* 重命名知识库。
+* 查看知识库列表。
+* 一个知识库上传多个 PDF。
+* 查看知识库文档。
+* 删除文档。
+* 对整个知识库提问。
+* 选择部分文档提问。
+* Conversation 与知识库关联。
+* 用户数据隔离。
+
+---
+
+# 31. Phase 3：Retrieval V2
+
+Phase 2 稳定后再进入。
+
+目标流程：
+
+```text
+Query
+↓
+Query Rewrite
+↓
+Dense Retrieval
++
+Sparse Retrieval
+↓
+RRF
+↓
+Dedup
+↓
+CrossEncoder Rerank
+↓
+Threshold
+↓
+Context Builder
+↓
+LLM
+```
+
+---
+
+# 32. Dense Retrieval
+
+现有 Dense Retrieval 必须保留。
+
+它仍然是：
+
+```text
+Baseline
+```
+
+不要因为增加 BM25 就删除 Dense。
+
+---
+
+# 33. Sparse Retrieval
+
+Sparse/BM25 主要解决：
+
+* 模型名称。
+* 缩写。
+* 公式编号。
+* 专业术语。
+* 专有名词。
+* 文献编号。
+* 精确实体。
+* 数字匹配。
+
+Dense 更擅长：
+
+```text
+Semantic Similarity
+```
+
+Sparse 更擅长：
+
+```text
+Exact Matching
+```
+
+---
+
+# 34. RRF
+
+Dense 与 Sparse 优先使用：
+
+```text
+Reciprocal Rank Fusion
+```
+
+不要直接：
+
+```text
+dense_score + bm25_score
+```
+
+除非已经实现可靠 score normalization。
+
+---
+
+# 35. CrossEncoder Rerank
+
+当前 CrossEncoder 是项目核心能力之一。
+
+不得因为 Hybrid Retrieval 删除。
+
+正确职责：
+
+```text
+Dense + Sparse
+=
+提高 Recall
+
+CrossEncoder
+=
+提高 Precision
+```
+
+流程：
+
+```text
+Retrieve More
+↓
+Fuse
+↓
+Rerank
+↓
+Return Few
+```
+
+---
+
+# 36. Evidence Threshold
+
+后续加入：
+
+```text
+relevance_threshold
+```
+
+证据不足时：
+
+```text
+拒答
+```
+
+不要默认让 LLM 使用自身知识补齐。
+
+DocRAG 默认应该：
+
+```text
+Evidence Grounded
+```
+
+---
+
+# 37. Summary 特殊处理
+
+当前 Summary 类问题存在：
+
+```text
+Recall@3 较低
+```
+
+Summary 不能简单使用普通 Top-K。
+
+未来考虑：
+
+```text
+Multi Query
++
+Section Coverage
++
+Document Coverage
+```
+
+例如：
+
+```text
+Introduction
+Method
+Experiment
+Conclusion
+```
+
+分开召回。
+
+不要简单：
+
+```text
+top_k = 50
+```
+
+解决问题。
+
+---
+
+# 38. PDF Parsing V2
+
+当前：
+
+```text
+Page
+→
+Plain Text
+```
+
+未来逐步升级：
+
+```text
+Page
+→
+Layout Elements
+```
+
+可能包括：
+
+```text
+Heading
+Paragraph
+Table
+Figure Caption
+Equation
+List
+Header
+Footer
+```
+
+metadata：
+
+```text
+block_type
+bbox
+page
+section
+section_level
+```
+
+但不要在 Phase 1 提前实现。
+
+---
+
+# 39. OCR
+
+OCR 是 fallback。
+
+正确流程：
+
+```text
+Native PDF
+↓
+Text Extractable?
+↓
+Yes → Native
+No → OCR
+```
+
+不要所有 PDF 默认 OCR。
+
+保留：
+
+```text
+ocr_used
+```
+
+等 metadata。
+
+---
+
+# 40. Document Processing Status
+
+未来 Document 增加状态：
+
+```text
+pending
+parsing
+chunking
+embedding
+indexing
+completed
+failed
+```
+
+并记录：
+
+```text
+processing_stage
+error_code
+error_message
+processed_at
+```
+
+避免：
+
+```text
+MongoDB 有 Document
+但 VectorStore 索引不完整
+```
+
+---
+
+# 41. Batch Embedding
+
+未来大文档不能：
+
+```text
+all chunks
+→
+all embeddings
+→
+all vector writes
+```
+
+一次完成。
+
+需要配置：
+
+```text
+embedding_batch_size
+vector_write_batch_size
+```
+
+降低：
+
+* OOM。
+* 内存峰值。
+* 单次失败损失。
+* 长请求。
+
+---
+
+# 42. Model Lazy Loading
+
+如果当前：
+
+```text
+Embedding
+Reranker
+```
+
+在 import 时立即加载，未来逐步修改为：
+
+```text
+Application Start
+↓
+Service Initialization
+↓
+Lazy Load
+```
+
+模型不可用不应该导致整个项目无法 import。
+
+---
+
+# 43. VectorStore 抽象
+
+当前不要急着迁移数据库。
+
+先逐步抽象：
+
+```python
+class VectorStore:
+    add(...)
+    search(...)
+    delete(...)
+    delete_document(...)
+    delete_knowledge_base(...)
+```
+
+当前实现：
+
+```text
+ChromaVectorStore
+```
+
+未来：
+
+```text
+QdrantVectorStore
+MilvusVectorStore
+```
+
+业务逻辑尽量不要直接耦合某个数据库 SDK。
+
+---
+
+# 44. Chroma 迁移原则
+
+禁止因为：
+
+```text
+Qdrant 更企业级
+Milvus 更高级
+```
+
+直接迁移。
+
+必须先 benchmark。
+
+规模：
+
+```text
+10K
+100K
+500K chunks
+```
+
+记录：
+
+```text
+Index Time
+Write Throughput
+P50
+P95
+P99
+RAM
+Disk
+Concurrent Errors
+```
+
+达到瓶颈后再决定。
+
+---
+
+# 45. Evaluation 原则
+
+Evaluation 很重要，但当前采用：
+
+```text
+Phase-level Evaluation
+```
+
+而不是：
+
+```text
+Every-change Evaluation
+```
+
+即：
+
+```text
+一个 Phase 开发完成
++
+测试稳定
+↓
+统一实验
+```
+
+---
+
+# 46. 固定 Evaluation Dataset
+
+长期保留一套 frozen dataset。
+
+包括：
+
+```text
+Fact
+Summary
+No Answer
+Terminology
+Comparison
+Multi-hop
+Multi-document
+```
+
+后续扩展：
+
+```text
+Exact Entity
+Acronym
+Table QA
+Cross-document Comparison
+```
+
+---
+
+# 47. Chunk-Level Evaluation
+
+未来不能只使用：
+
+```text
+gold_page
+```
+
+还要逐步增加：
+
+```text
+gold_chunk_id
+gold_evidence
+gold_span
+```
+
+因为：
+
+```text
+Hit Page
+!=
+Hit Evidence
+```
+
+未来指标：
+
+```text
+Recall@K
+MRR
+nDCG
+Evidence Recall
+Evidence Precision
+Citation Accuracy
+Faithfulness
+Answer Correctness
+```
+
+---
+
+# 48. Query Rewrite
+
+当前 Query Rewrite 保留。
+
+Rewrite 必须尽量保持：
+
+* 专有名词。
+* 模型名。
+* 数字。
+* 文件名。
+* 论文名称。
+* 表格编号。
+* 技术缩写。
+
+例如：
+
+```text
+BGE-M3 在表 4 的 Recall@10 是多少？
+```
+
+不能重写成：
+
+```text
+该模型的效果怎么样？
+```
+
+---
+
+# 49. Conversation Memory
+
+Memory 的作用：
+
+```text
+理解追问
+```
+
+不是：
+
+```text
+保存所有历史然后全部塞入 Prompt
+```
+
+当前优先：
+
+```text
+最近 N 轮
+```
+
+未来可以考虑：
+
+```text
+Summary Memory
+```
+
+当前不要提前实现长期记忆系统。
+
+---
+
+# 50. Agent Router
+
+当前 Router：
+
+```text
+qa
+summary
+term
+report
+source_check
+```
+
+继续保留。
+
+原则：
+
+```text
+Rule First
+LLM Second
+Fallback QA
+```
+
+不要为了 Agent 概念引入复杂编排框架。
+
+项目核心：
+
+```text
+High-quality RAG
+```
+
+而不是：
+
+```text
+Complex Agent Orchestration
+```
+
+---
+
+# 51. 用户类型 Prompt
+
+当前用户类型：
+
+```text
+undergraduate
+graduate
+researcher
+developer
+teacher
+general
+```
+
+回答策略：
+
+## undergraduate
+
+* 少术语。
+* 多解释。
+* 强调理解。
+
+## graduate
+
+* 方法。
+* 实验。
+* 创新。
+* 对比。
+
+## researcher
+
+* Related Work。
+* Method。
+* Limitations。
+* Reproduction。
+
+## developer
+
+* Architecture。
+* API。
+* Implementation。
+* Deployment。
+
+## teacher
+
+* 内容结构。
+* 教学重点。
+* 可提问点。
+
+## general
+
+* 简洁。
+* 清晰。
+
+用户类型只改变：
+
+```text
+Answer Style
+```
+
+不能改变：
+
+```text
+Evidence
+```
+
+---
+
+# 52. 用户隔离与认证边界
+
+当前：
+
+```text
+user_id
+```
+
+实现的是：
+
+```text
+Logical User Isolation
+```
+
+不是：
+
+```text
+Real Authentication
+```
+
+README 和简历可以写：
+
+```text
+用户级数据隔离
+```
+
+暂时不要写：
+
+```text
+完善权限系统
+RBAC
+企业级认证
+```
+
+除非后续真实实现：
+
+```text
+JWT
+OAuth
+Session Authentication
+RBAC
+```
+
+---
+
+# 53. MongoDB 职责
+
+MongoDB 负责：
+
+```text
+users
+documents
+conversations
+messages
+sources
+```
+
+未来：
+
+```text
+knowledge_bases
+```
+
+MongoDB 定位：
+
+```text
+Application Metadata
++
+Persistence
+```
+
+Vector DB 定位：
+
+```text
+Embedding Retrieval
+```
+
+不要混淆职责。
+
+---
+
+# 54. 项目命名统一
+
+正式定位逐步统一为：
+
+```text
+DocRAG
+```
+
+旧医学命名逐步清理。
+
+例如：
+
+```text
+medical_chunks
+```
+
+未来改成：
+
+```text
+document_chunks
+```
+
+但修改前必须考虑：
+
+* 已有数据。
+* collection migration。
+* tests。
+* backward compatibility。
+
+不要为了改名字破坏现有索引。
+
+---
+
+# 55. DTO 与内部数据结构
+
+逐步减少：
+
+```python
+chunk["文本块"]
+chunk["页码"]
+```
+
+这种字符串字典操作。
+
+未来优先：
+
+```python
+@dataclass
+class Chunk:
+    text: str
+    page_start: int
+    page_end: int
+```
+
+或者：
+
+```text
+Pydantic Model
+```
+
+但：
+
+```text
+禁止一次性重构整个项目
+```
+
+只在当前修改模块自然迁移。
+
+---
+
+# 56. API 修改原则
+
+新增或修改接口必须考虑：
+
+```text
+Request
+Response
+Status Code
+Error Code
+Frontend Compatibility
+Backward Compatibility
+Tests
+```
+
+不能只保证：
+
+```text
+Postman 可以调用
+```
+
+还需要考虑前端和已有数据。
+
+---
+
+# 57. Error Handling
+
+错误类型逐步统一：
+
+```text
+PDF_PARSE_FAILED
+OCR_FAILED
+CHUNK_FAILED
+EMBEDDING_FAILED
+VECTOR_WRITE_FAILED
+RETRIEVAL_FAILED
+RERANK_FAILED
+LLM_TIMEOUT
+INDEX_VERSION_MISMATCH
+```
+
+错误需要：
+
+```text
+可定位
+可记录
+可恢复
+可重试
+```
+
+---
+
+# 58. Logging
+
+关键日志字段：
+
+```text
+request_id
+user_id
+document_id
+kb_id
+file_name
+
+parse_time
+chunk_time
+embedding_time
+index_time
+retrieval_time
+rerank_time
+llm_time
+
+chunk_count
+candidate_count
+reranked_count
+
+index_version
+chunk_strategy
+
+error_stage
+error_code
+```
+
+禁止记录：
+
+* API Key。
+* Password。
+* Token。
+* 完整隐私文档内容。
+
+---
+
+# 59. Security
+
+禁止：
+
+```text
+API Key 放前端
+数据库密码硬编码
+Secret commit 到 Git
+```
+
+使用：
+
+```text
+.env
+Environment Variables
+Deployment Secrets
+```
+
+配置变化时：
+
+```text
+.env.example
+```
+
+同步维护。
+
+---
+
+# 60. Deployment 原则
+
+项目首先保证：
+
+```text
+Local Runnable
+```
+
+部署其次。
+
+如果免费平台因为：
+
+```text
+Memory
+CPU
+Outbound Restriction
+Model Size
+```
+
+无法支持：
+
+```text
+Embedding
+Reranker
+```
+
+不要为了部署而删除核心能力。
+
+尤其：
+
+```text
+CrossEncoder Rerank
+```
+
+属于当前项目重要技术能力。
+
+---
+
+# 61. Frontend 原则
+
+前端目标：
+
+```text
+Professional AI Knowledge Base UI
+```
+
+重点：
+
+* Conversation List。
+* Knowledge Base List。
+* Document List。
+* Upload Status。
+* Sources。
+* Loading。
+* Error State。
+* Empty State。
+* Responsive Layout。
+
+Phase 2 之前不要优先进行大规模 UI 重构。
+
+---
+
+# 62. 性能优化原则
+
+优先级：
+
+```text
+Correctness
+↓
+Maintainability
+↓
+Tests
+↓
+Evaluation
+↓
+Performance
+```
+
+没有 profiling 结果时，不要凭感觉做性能优化。
+
+---
+
+# 63. 修改前必须检查
+
+每个任务开始时：
+
+```text
+1. git status
+2. 查看目标文件
+3. 查看相关测试
+4. 搜索调用点
+5. 查看配置
+6. 判断是否存在用户未提交修改
+```
+
+如果存在未提交修改：
+
+```text
+禁止覆盖
+禁止 reset
+禁止 clean
+```
+
+---
+
+# 64. Git 安全规则
+
+禁止自动执行：
+
+```bash
+git reset --hard
+git clean -fd
+git checkout -- .
+git push --force
+```
+
+除非用户明确授权。
+
+推荐使用：
+
+```bash
+git status
+git diff
+```
+
+确认变化。
+
+---
+
+# 65. 每轮任务的执行方式
+
+默认：
+
+```text
+Inspect
+↓
+Plan
+↓
+Implement
+↓
+Test
+↓
+Fix Regression
+↓
+Summarize
+```
+
+如果当前 Phase 尚未完成：
+
+```text
+继续 Phase
+```
+
+不要自动跑完整效果实验。
+
+---
+
+# 66. Codex 完成任务后的汇报格式
+
+任务结束后输出以下内容。
+
+## 修改内容
+
+列出：
+
+```text
+file
+change
+reason
+```
+
+## 实现结果
+
+说明当前功能是否完成。
+
+## 测试结果
+
+例如：
+
+```text
+pytest tests/test_text_splitter_service.py -v
+```
+
+结果：
+
+```text
+10 passed
+```
+
+再运行：
+
+```text
+pytest
+```
+
+结果：
+
+```text
+82 passed
+```
+
+## Regression
+
+明确说明是否存在回归。
+
+## 风险
+
+说明：
+
+```text
+compatibility
+migration
+data
+performance
+```
+
+## 当前 Phase 进度
+
+例如：
+
+```text
+Phase 1
+
+[x] Fixed
+[x] Recursive
+[x] Chunk Metadata
+[ ] Index Fingerprint
+[ ] Force Reindex
+[ ] Phase Evaluation
+```
+
+## 下一步
+
+只给最相关的：
+
+```text
+1–3 个任务
+```
+
+---
+
+# 67. Definition of Done
+
+普通代码任务完成必须满足：
+
+```text
+功能可运行
++
+相关测试通过
++
+没有明显 Regression
++
+必要配置同步
++
+必要 README 更新
+```
+
+---
+
+# 68. Phase Definition of Done
+
+一个完整 Phase 完成必须满足：
+
+```text
+功能闭环
++
+Tests Pass
++
+Regression Fixed
++
+接口基本稳定
++
+数据结构基本稳定
+```
+
+之后才进入：
+
+```text
+Phase Evaluation
+```
+
+---
+
+# 69. RAG Evaluation Definition of Done
+
+阶段实验需要：
+
+```text
+固定 Dataset
++
+固定环境
++
+明确 Baseline
++
+Before / After Metrics
+```
+
+如果优化下降：
+
+必须明确：
+
+```text
+Regression
+```
+
+不要隐藏。
+
+---
+
+# 70. 当前禁止主动引入的技术
+
+当前不要主动添加：
+
+```text
+GraphRAG
+Knowledge Graph
+Multi-Agent
+Long-term Agent Memory
+Fine-tuning
+LoRA
+Full Microservices
+Kubernetes
+Kafka
+Redis Cluster
+Milvus Cluster
+复杂 RBAC
+```
+
+除非：
+
+1. 当前功能确实需要。
+2. 用户明确要求。
+3. 有合理工程依据。
+
+---
+
+# 71. 技术选择原则
+
+任何新技术都需要回答：
+
+```text
+解决什么问题？
+```
+
+以及：
+
+```text
+为什么当前方案解决不了？
+```
+
+优先：
+
+```text
+Problem
+→
+Design
+→
+Implementation
+→
+Validation
+```
+
+禁止：
+
+```text
+Technology
+→
+Technology
+→
+Technology
+```
+
+---
+
+# 72. 面试价值
+
+项目升级需要能够回答：
+
+```text
+为什么这样切片？
+为什么需要 Reranker？
+为什么需要 Query Rewrite？
+为什么增加 BM25？
+为什么使用 RRF？
+为什么需要 Index Fingerprint？
+为什么 Summary 不能普通 Top-K？
+什么时候应该迁移 Qdrant？
+为什么保留 Fixed Baseline？
+```
+
+每个重要能力最终都形成：
+
+```text
+Problem
+Design
+Trade-off
+Implementation
+Result
+```
+
+---
+
+# 73. 简历项目定位
+
+当前可以描述：
+
+> 设计并实现 DocRAG 文档智能问答系统，完成 PDF 文档解析、向量检索、CrossEncoder Rerank、Query Rewrite、多轮会话记忆、用户级数据隔离、Agent Router 与离线 RAG 评估体系，并围绕结构化切片、多文档知识库、索引版本管理和混合检索持续进行工程升级。
+
+当前不要写：
+
+```text
+企业级知识库
+亿级向量
+高并发平台
+完善 RBAC
+完整微服务架构
+```
+
+除非真实实现并验证。
+
+---
+
+# 74. Windows 开发环境
+
+主要运行环境：
+
+```text
+Windows
+```
+
+命令优先：
+
+```text
+CMD
+PowerShell
+```
+
+路径优先使用：
+
+```text
+D:\MedRag
+```
+
+不要默认：
+
+```text
+/home/user/project
+```
+
+如果必须提供 Linux 命令，要同时说明 Windows 对应方式。
+
+---
+
+# 75. Python 代码要求
+
+遵循：
+
+* 类型注解。
+* 合理 docstring。
+* 清晰函数职责。
+* 避免超长函数。
+* 避免重复逻辑。
+* 避免隐藏副作用。
+* 保持现有代码风格。
+* 优先小步修改。
+* 不过度设计。
+
+不要为了所谓 Clean Architecture 大规模重建项目。
+
+---
+
+# 76. 测试命令
+
+修改 splitter 时优先：
+
+```bash
+pytest tests/test_text_splitter_service.py -v
+```
+
+然后全量：
+
+```bash
+pytest
+```
+
+当前历史稳定基线：
+
+```text
+76 passed
+```
+
+如果测试数量增加是正常现象。
+
+如果已有测试失败：
+
+```text
+必须处理
+```
+
+---
+
+# 77. 遇到未知情况
+
+优先：
+
+```text
+Read Code
+Read Tests
+Read Config
+Read Logs
+Search Call Sites
+```
+
+不要猜。
+
+如果项目文件本身可以回答问题：
+
+```text
+不要询问用户
+```
+
+只有以下情况才需要询问：
+
+* 产品方向选择。
+* 不可恢复操作。
+* 业务规则无法从代码判断。
+* 需要用户 API Key。
+* 需要真实外部账户信息。
+
+---
+
+# 78. 不允许破坏用户现有工作
+
+如果发现用户已有修改：
+
+```text
+不得覆盖
+不得丢弃
+不得 reset
+```
+
+必须基于当前 working tree 继续工作。
+
+如果存在冲突：
+
+先说明。
+
+---
+
+# 79. 当前 Phase 1 状态模板
+
+每次 Phase 1 结束任务都更新认知：
+
+```text
+Phase 1: Chunking V2 + Index Version
+
+[ ] Unified Chunk Interface
+[ ] Fixed Strategy
+[ ] Recursive Strategy
+[ ] Chunk Metadata
+[ ] Splitter Tests
+[ ] Index Fingerprint
+[ ] Force Reindex
+[ ] Ingestion Tests
+[ ] Full Regression Tests
+[ ] Phase 1 Evaluation
+```
+
+只有全部开发项完成后：
+
+```text
+再运行 Phase 1 Evaluation
+```
+
+---
+
+# 80. 当前最重要规则
+
+Codex 必须记住：
+
+> 当前阶段先开发，阶段完成后再统一做实验。
+
+不要：
+
+```text
+改一个函数
+→
+跑一次完整 RAG Evaluation
+```
+
+应该：
+
+```text
+完成一个完整 Phase
+→
+Tests Stable
+→
+统一 Evaluation
+```
+
+---
+
+# 81. 实验触发条件
+
+默认情况下不要主动运行完整 RAG 实验。
+
+只有以下情况可以提前实验：
+
+1. 用户明确要求。
+2. 当前设计必须依赖实验结果才能继续。
+3. 出现明显效果 Regression，需要定位。
+4. 两种技术实现无法通过工程判断选择。
+5. 当前 Phase 已经开发完成。
+
+除此之外：
+
+```text
+继续开发当前 Phase
+```
+
+---
+
+# 82. 当前最优先任务
+
+现在从：
+
+```text
+medrag/backend/services/text_splitter_service.py
+```
+
+开始。
+
+第一目标：
+
+```text
+Fixed
++
+Recursive
++
+统一 Chunk Strategy
+```
+
+然后继续：
+
+```text
+Chunk Metadata
+↓
+Index Fingerprint
+↓
+force_reindex
+↓
+Tests
+```
+
+等 Phase 1 开发完成，再进行一次完整实验。
+
+---
+
+# 83. 项目最终目标链路
+
+DocRAG V2 最终希望形成：
+
+```text
+Upload Documents
+↓
+Document Parsing
+↓
+Versioned Chunking
+↓
+Embedding
+↓
+Knowledge Base
+↓
+Dense + Sparse Retrieval
+↓
+RRF
+↓
+CrossEncoder Rerank
+↓
+Evidence Filter
+↓
+Context Builder
+↓
+LLM
+↓
+Citation
+↓
+Conversation Persistence
+↓
+Offline Evaluation
+```
+
+---
+
+# 84. 最终原则
+
+始终遵守：
+
+> 不堆技术，以真实问题驱动设计。
+
+> 先把功能做完整，再统一进行阶段实验。
+
+> 开发过程必须测试，但不要求频繁跑效果实验。
+
+> 不凭感觉判断 RAG 优化是否有效，阶段结束后统一验证。
+
+> 不破坏稳定基线，小步迭代。
+
+> 不为了部署牺牲项目核心能力。
+
+> 不一次修改多个核心变量。
+
+> 不为了“企业级”三个字过度设计。
+
+> 每个重要技术升级都应该最终能够从代码、工程设计、实验结果和面试表达四个角度解释清楚。
+
+---
+
+# 85. Codex 当前行动指令
+
+读取本文件后：
+
+1. 将 `D:\MedRag` 视为项目根目录。
+2. 首先查看 `git status`。
+3. 读取当前目标模块和测试。
+4. 不覆盖用户已有修改。
+5. 当前专注 Phase 1。
+6. 先实现完整功能。
+7. 修改后运行相关测试。
+8. 阶段未完成时继续开发，不主动运行完整 RAG 效果实验。
+9. Phase 1 完成后，再统一进行 Fixed vs Recursive Evaluation。
+10. 每轮结束汇报修改文件、测试结果、Phase 进度和下一步。

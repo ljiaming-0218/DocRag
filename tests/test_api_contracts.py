@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock, Mock
 
 import pytest
 from fastapi import FastAPI
@@ -426,6 +426,49 @@ def test_index_pdf_maps_validation_error_to_400(
     index_document.assert_awaited_once()
 
 
+def test_index_pdf_forwards_chunk_strategy(
+    client: TestClient,
+    monkeypatch,
+):
+    index_document = AsyncMock(return_value={
+        "document_id": "document-1",
+        "chunk_strategy": "recursive",
+    })
+    monkeypatch.setattr(
+        pdf_router,
+        "index_document",
+        index_document,
+    )
+
+    response = client.post(
+        "/pdf/index",
+        params={
+            "user_id": "user-1",
+            "chunk_size": 500,
+            "chunk_overlap": 50,
+            "strategy": "recursive",
+            "force_reindex": "true",
+        },
+        files={
+            "file": (
+                "paper.pdf",
+                b"%PDF-1.7",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    index_document.assert_awaited_once_with(
+        user_id="user-1",
+        file=ANY,
+        chunk_size=500,
+        chunk_overlap=50,
+        strategy="recursive",
+        force_reindex=True,
+    )
+
+
 def test_index_pdf_maps_runtime_error_to_500(
     client: TestClient,
     monkeypatch,
@@ -461,6 +504,92 @@ def test_index_pdf_maps_runtime_error_to_500(
         "message": "向量数据库写入失败",
     }
     index_document.assert_awaited_once()
+
+
+def test_parse_pdf_returns_non_persistent_preview(
+    client: TestClient,
+    monkeypatch,
+):
+    preview = AsyncMock(return_value={
+        "文件名": "paper.pdf",
+        "总页数": 1,
+        "每页内容": [{"页码": 1, "文本": "content"}],
+        "document_id": None,
+        "user_id": "user-1",
+        "document_hash": "hash-1",
+        "persisted": False,
+    })
+    monkeypatch.setattr(pdf_router, "preview_pdf_pages", preview)
+
+    response = client.post(
+        "/pdf/parse",
+        params={"user_id": "user-1"},
+        files={
+            "file": (
+                "paper.pdf",
+                b"%PDF-1.7",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["document_id"] is None
+    assert response.json()["persisted"] is False
+    preview.assert_awaited_once()
+
+
+def test_chunk_preview_does_not_create_persistent_document(
+    client: TestClient,
+    monkeypatch,
+):
+    monkeypatch.setattr(pdf_router, "validate_chunk_params", Mock())
+    monkeypatch.setattr(
+        pdf_router,
+        "preview_pdf_pages",
+        AsyncMock(return_value={
+            "文件名": "paper.pdf",
+            "总页数": 1,
+            "每页内容": [{
+                "页码": 1,
+                "文本": "content",
+                "document_id": None,
+                "user_id": "user-1",
+            }],
+            "document_id": None,
+            "user_id": "user-1",
+            "persisted": False,
+        }),
+    )
+    monkeypatch.setattr(
+        pdf_router,
+        "split_pages",
+        Mock(return_value=[{
+            "页码": 1,
+            "文本块": "content",
+            "document_id": None,
+        }]),
+    )
+
+    response = client.post(
+        "/pdf/chunks",
+        params={
+            "user_id": "user-1",
+            "chunk_size": 500,
+            "chunk_overlap": 50,
+        },
+        files={
+            "file": (
+                "paper.pdf",
+                b"%PDF-1.7",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["document_id"] is None
+    assert response.json()["persisted"] is False
 
 
 def test_pdf_answer_preserves_llm_error_contract(

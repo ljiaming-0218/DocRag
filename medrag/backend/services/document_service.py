@@ -2,7 +2,14 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from services.user_service import get_existing_user
-from stores.document_store import find_document_by_user_and_hash, find_document_by_user_and_id, find_documents_by_user, insert_document, update_document_language
+from stores.document_store import (
+    find_document_by_user_and_hash,
+    find_document_by_user_and_id,
+    find_documents_by_user,
+    insert_document,
+    update_document_index_state,
+    update_document_language,
+)
 
 async def get_or_create_document(user_id, filename, document_hash) -> dict:
     user_id = user_id.strip()
@@ -28,6 +35,9 @@ async def get_or_create_document(user_id, filename, document_hash) -> dict:
             "created_at": now,
             "updated_at": now,
             "language": "unknown",
+            "index_fingerprint": None,
+            "index_config": None,
+            "indexed_at": None,
         }
         await insert_document(document)
         return {
@@ -39,6 +49,9 @@ async def get_or_create_document(user_id, filename, document_hash) -> dict:
             "created_at": document["created_at"],
             "updated_at": document["updated_at"],
             "language": document.get("language", "unknown"),
+            "index_fingerprint": document.get("index_fingerprint"),
+            "index_config": document.get("index_config"),
+            "indexed_at": document.get("indexed_at"),
         }
 
 
@@ -51,6 +64,9 @@ async def get_or_create_document(user_id, filename, document_hash) -> dict:
         "created_at": document["created_at"],
         "updated_at": document["updated_at"],
         "language": document.get("language", "unknown"),
+        "index_fingerprint": document.get("index_fingerprint"),
+        "index_config": document.get("index_config"),
+        "indexed_at": document.get("indexed_at"),
     }
 
 
@@ -82,6 +98,24 @@ async def set_document_language(
         language,
     )
 
+    if not updated:
+        raise ValueError("文档不存在或不属于当前用户")
+
+
+async def set_document_index_state(
+    user_id: str,
+    document_id: str,
+    index_fingerprint: str,
+    index_config: dict,
+    indexed_at: datetime,
+) -> None:
+    updated = await update_document_index_state(
+        user_id,
+        document_id,
+        index_fingerprint,
+        index_config,
+        indexed_at,
+    )
     if not updated:
         raise ValueError("文档不存在或不属于当前用户")
 

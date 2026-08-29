@@ -1,4 +1,6 @@
 from asyncio import to_thread
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from hashlib import sha256
 from pathlib import Path
 from typing import BinaryIO
@@ -18,9 +20,58 @@ async def upload_pdf(file: UploadFile) -> dict:
         file.file,
     )
 
+
+@asynccontextmanager
+async def temporary_pdf(file: UploadFile) -> AsyncIterator[dict]:
+    stored_file = await to_thread(
+        save_temporary_pdf_stream,
+        file.filename,
+        file.file,
+    )
+    path = Path(stored_file["保存路径"])
+    try:
+        yield stored_file
+    finally:
+        await to_thread(path.unlink, missing_ok=True)
+
+
 def save_pdf_stream(
     filename: str | None,
     source: BinaryIO,
+) -> dict:
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path = UPLOAD_DIR / f".upload_{uuid4().hex}.tmp"
+    result = write_validated_pdf_stream(
+        filename,
+        source,
+        temp_path,
+    )
+    save_path = UPLOAD_DIR / (
+        f"{result['document_hash']}_{result['文件名']}"
+    )
+
+    if save_path.exists():
+        temp_path.unlink(missing_ok=True)
+    else:
+        temp_path.replace(save_path)
+
+    result["保存路径"] = str(save_path)
+    return result
+
+
+def save_temporary_pdf_stream(
+    filename: str | None,
+    source: BinaryIO,
+) -> dict:
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path = UPLOAD_DIR / f".preview_{uuid4().hex}.tmp"
+    return write_validated_pdf_stream(filename, source, temp_path)
+
+
+def write_validated_pdf_stream(
+    filename: str | None,
+    source: BinaryIO,
+    destination_path: Path,
 ) -> dict:
     if not filename:
         raise ValueError("文件名不能为空")
@@ -31,15 +82,13 @@ def save_pdf_stream(
     if MAX_UPLOAD_SIZE_BYTES <= 0:
         raise RuntimeError("MAX_UPLOAD_SIZE_MB 必须大于 0")
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    temp_path = UPLOAD_DIR / f".upload_{uuid4().hex}.tmp"
     hasher = sha256()
     total_size = 0
     read_size = 1024 * 1024
 
     try:
         source.seek(0)
-        with temp_path.open("xb") as destination:
+        with destination_path.open("xb") as destination:
             while True:
                 chunk = source.read(read_size)
                 if not chunk:
@@ -64,19 +113,12 @@ def save_pdf_stream(
         if total_size == 0:
             raise ValueError("上传的 PDF 不能为空")
 
-        document_hash = hasher.hexdigest()
-        save_path = UPLOAD_DIR / f"{document_hash}_{safe_name}"
-
-        if save_path.exists():
-            temp_path.unlink()
-        else:
-            temp_path.replace(save_path)
     except Exception:
-        temp_path.unlink(missing_ok=True)
+        destination_path.unlink(missing_ok=True)
         raise
 
     return {
         "文件名": safe_name,
-        "保存路径": str(save_path),
-        "document_hash": document_hash,
+        "保存路径": str(destination_path),
+        "document_hash": hasher.hexdigest(),
     }
