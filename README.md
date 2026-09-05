@@ -46,13 +46,19 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 - 通过 `user_id + document_hash` 识别同一用户重复上传的相同文件，避免重复解析和索引。
 - 根据切片参数、切片版本、Embedding 模型和索引版本生成 `index_fingerprint`；只有指纹一致才复用旧索引。
 - `/pdf/index` 支持 `force_reindex=true`，用于忽略旧指纹并强制重建同一 `document_id` 的向量索引。
+- 每次重建生成独立 `index_generation_id`，新代次完整写入并验证后才切换 MongoDB 中的 active generation；Dense 与 BM25 检索只读取当前 active 版本。
 - 对疑似扫描页支持可选的 Tesseract 中英文 OCR 回退。
 - 记录文档主要语言，用于跨语言 Query Rewrite。
+- 持久化 `parsing/chunking/embedding/indexing` 处理阶段和失败原因，只有完整写入并校验后才将索引标记为完成。
+- Embedding 与 Chroma 写入支持配置化批处理，降低大文档处理时的单批内存和写入压力。
 
 ### 检索与生成
 
 - 使用 `BAAI/bge-small-zh-v1.5` 生成文本向量。
 - 使用 Chroma 持久化向量，并通过 `user_id + document_id` 过滤检索范围。
+- 支持通过 `RETRIEVAL_MODE=dense|hybrid` 切换 Dense 基线与混合检索。
+- Hybrid 模式使用 BM25 补充模型名、缩写、数字等精确匹配候选，并通过 RRF 融合 Dense 与 Sparse 排名。
+- 支持通过 `EVIDENCE_RERANK_MIN_SCORE` 配置 CrossEncoder 证据阈值；留空时关闭过滤，阈值需使用固定评估集校准。
 - 先扩大向量候选池，再使用 `BAAI/bge-reranker-base` 对 `query + chunk` 重排。
 - 保存并展示回答对应的 sources，包括页码、chunk 和检索分数。
 - 检索无证据时直接拒答，不调用 LLM 基于参数知识补充答案。
@@ -285,6 +291,10 @@ copy .env.example .env
 OPENROUTER_API_KEY=your_key
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_MODEL=your_model
+RETRIEVAL_MODE=dense
+EVIDENCE_RERANK_MIN_SCORE=
+EMBEDDING_BATCH_SIZE=32
+VECTOR_WRITE_BATCH_SIZE=100
 CHROMA_DIR=D:/MedRag/runtime/chroma_db
 UPLOAD_DIR=D:/MedRag/runtime/uploads
 MONGODB_URI=mongodb://127.0.0.1:27017
@@ -413,7 +423,7 @@ python eval\calculate_metrics.py
 
 ### Chroma HNSW 索引损坏
 
-旧 Chroma 持久化目录曾在删除文档向量时出现 `Error loading hnsw index`。处理时保留损坏目录用于排查，创建新的项目级持久化目录并重新索引；配置统一使用 `CHROMA_DIR`，避免数据散落到系统盘。重复索引前按 `user_id + document_id` 清理旧 chunk，降低残留数据污染检索的风险。
+旧 Chroma 持久化目录曾在删除文档向量时出现 `Error loading hnsw index`。处理时保留损坏目录用于排查，创建新的项目级持久化目录并重新索引；配置统一使用 `CHROMA_DIR`，避免数据散落到系统盘。当前重新索引使用独立 generation 写入，验证完成后切换 active generation；失败代次会被清理，旧 active 版本不会在写入开始前删除。
 
 ### Query Rewrite 偏离或失败
 

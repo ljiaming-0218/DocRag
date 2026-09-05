@@ -5,6 +5,11 @@ from fastapi import APIRouter, File, UploadFile
 from api_errors import APIError
 from services.chunk_validation_service import validate_chunk_params
 from services.llm_service import LLMServiceError, generate_answer
+from services.document_service import (
+    DocumentNotReadyError,
+    ensure_document_ready,
+    get_existing_document_for_user,
+)
 from services.prompt_service import build_rag_prompt
 from services.text_splitter_service import (
     DEFAULT_CHUNK_STRATEGY,
@@ -26,6 +31,12 @@ router = APIRouter(
 
 
 def raise_pdf_error(error: Exception) -> None:
+    if isinstance(error, DocumentNotReadyError):
+        raise APIError(
+            status_code=409,
+            code="DOCUMENT_NOT_READY",
+            message=str(error),
+        ) from error
     if isinstance(error, ValueError):
         raise APIError(
             status_code=400,
@@ -40,15 +51,29 @@ def raise_pdf_error(error: Exception) -> None:
     ) from error
 
 
+async def get_active_index_generation(
+    user_id: str,
+    document_id: str,
+) -> str | None:
+    document = await get_existing_document_for_user(user_id, document_id)
+    ensure_document_ready(document)
+    return document.get("active_index_generation_id")
+
+
 @router.post("/search")
 async def search_pdf(user_id: str, document_id: str, query: str, n_results: int = 3) -> dict:
     try:
+        index_generation_id = await get_active_index_generation(
+            user_id,
+            document_id,
+        )
         results = await to_thread(
             search_relevant_chunks,
             user_id,
             document_id,
             query,
             n_results,
+            index_generation_id,
         )
     except (ValueError, RuntimeError) as e:
         raise_pdf_error(e)
@@ -124,12 +149,17 @@ async def parse_pdf_chunks(
 @router.post("/prompt-preview")
 async def preview_rag_prompt(user_id: str, document_id: str, query: str, n_results: int = 3) -> dict:
     try:
+        index_generation_id = await get_active_index_generation(
+            user_id,
+            document_id,
+        )
         retrieved_chunks = await to_thread(
             search_relevant_chunks,
             user_id,
             document_id,
             query,
             n_results,
+            index_generation_id,
         )
         prompt = build_rag_prompt(query, retrieved_chunks)
     except (ValueError, RuntimeError) as e:
@@ -147,11 +177,27 @@ async def preview_rag_prompt(user_id: str, document_id: str, query: str, n_resul
     }
 
 @router.post("/answer")
-def answer_pdf_question(user_id:str, document_id: str, query: str, n_results: int = 3) -> dict:
+async def answer_pdf_question(
+    user_id: str,
+    document_id: str,
+    query: str,
+    n_results: int = 3,
+) -> dict:
     try:
-        retrieved_chunks = search_relevant_chunks(user_id, document_id, query, n_results)
+        index_generation_id = await get_active_index_generation(
+            user_id,
+            document_id,
+        )
+        retrieved_chunks = await to_thread(
+            search_relevant_chunks,
+            user_id,
+            document_id,
+            query,
+            n_results,
+            index_generation_id,
+        )
         prompt = build_rag_prompt(query, retrieved_chunks)
-        answer = generate_answer(prompt)
+        answer = await to_thread(generate_answer, prompt)
     except LLMServiceError as error:
         raise APIError(
             status_code=error.status_code,

@@ -12,8 +12,9 @@ def make_chunk(
     page_number: int = 1,
     chunk_index: int = 0,
     text: str = "chunk text",
+    index_generation_id: str | None = None,
 ) -> dict:
-    return {
+    chunk = {
         "user_id": user_id,
         "document_id": document_id,
         "页码": page_number,
@@ -23,6 +24,9 @@ def make_chunk(
         "提取方式": "text",
         "图片数量": 0,
     }
+    if index_generation_id is not None:
+        chunk["index_generation_id"] = index_generation_id
+    return chunk
 
 
 class FakeCollection:
@@ -31,10 +35,12 @@ class FakeCollection:
         existing_ids: set[str] | None = None,
         *,
         fail_upsert: bool = False,
+        fail_upsert_call: int | None = None,
         missing_after_upsert: set[str] | None = None,
     ) -> None:
         self.ids = set(existing_ids or set())
         self.fail_upsert = fail_upsert
+        self.fail_upsert_call = fail_upsert_call
         self.missing_after_upsert = set(missing_after_upsert or set())
         self.upsert_calls: list[dict] = []
         self.delete_calls: list[list[str]] = []
@@ -61,7 +67,9 @@ class FakeCollection:
 
     def upsert(self, **kwargs) -> None:
         self.upsert_calls.append(kwargs)
-        if self.fail_upsert:
+        if self.fail_upsert or (
+            self.fail_upsert_call == len(self.upsert_calls)
+        ):
             raise RuntimeError("simulated upsert failure")
         self.ids.update(kwargs["ids"])
 
@@ -96,6 +104,17 @@ def test_build_chunk_id_is_stable_and_scoped():
         "user-a_document-a_page_3_chunk_7"
     )
 
+
+def test_build_chunk_id_scopes_versioned_chunk_to_generation():
+    chunk = make_chunk(
+        page_number=3,
+        chunk_index=7,
+        index_generation_id="generation-new",
+    )
+
+    assert service.build_chunk_id(chunk) == (
+        "user-1_document-1_generation-new_page_3_chunk_7"
+    )
 
 def test_build_chunk_metadata_supports_legacy_chunk():
     chunk = make_chunk(page_number=3, chunk_index=7)
@@ -153,6 +172,27 @@ def test_first_save_upserts_without_deleting(monkeypatch):
     }
 
 
+def test_save_chunks_writes_in_batches(monkeypatch):
+    collection = FakeCollection()
+    install_fake_chroma(monkeypatch, collection)
+    chunks = [
+        make_chunk(chunk_index=index)
+        for index in range(5)
+    ]
+
+    saved_count = service.save_chunks(chunks, batch_size=2)
+
+    assert saved_count == 5
+    assert [
+        len(item["ids"])
+        for item in collection.upsert_calls
+    ] == [2, 2, 1]
+    assert collection.ids == {
+        service.build_chunk_id(chunk)
+        for chunk in chunks
+    }
+
+
 def test_save_chunks_writes_chunk_strategy(monkeypatch):
     collection = FakeCollection()
     install_fake_chroma(monkeypatch, collection)
@@ -187,6 +227,24 @@ def test_save_chunks_writes_index_metadata(monkeypatch):
     assert metadata["embedding_model"] == "BAAI/bge-small-zh-v1.5"
 
 
+def test_versioned_save_keeps_previous_generation(monkeypatch):
+    old_id = (
+        "user-1_document-1_generation-old_page_1_chunk_0"
+    )
+    collection = FakeCollection({old_id})
+    install_fake_chroma(monkeypatch, collection)
+    chunk = make_chunk(index_generation_id="generation-new")
+
+    saved_count = service.save_chunks([chunk])
+
+    assert saved_count == 1
+    assert collection.delete_calls == []
+    assert old_id in collection.ids
+    assert service.build_chunk_id(chunk) in collection.ids
+    metadata = collection.upsert_calls[0]["metadatas"][0]
+    assert metadata["index_generation_id"] == "generation-new"
+
+
 def test_reindex_deletes_only_stale_chunk_ids(monkeypatch):
     kept_chunk = make_chunk(chunk_index=0)
     new_chunk = make_chunk(chunk_index=1)
@@ -218,6 +276,60 @@ def test_upsert_failure_does_not_delete_old_chunks(monkeypatch):
 
     assert collection.delete_calls == []
     assert collection.ids == {old_id}
+
+
+def test_second_batch_failure_can_be_retried(monkeypatch):
+    old_id = "user-1_document-1_page_1_chunk_99"
+    collection = FakeCollection(
+        {old_id},
+        fail_upsert_call=2,
+    )
+    install_fake_chroma(monkeypatch, collection)
+    chunks = [
+        make_chunk(chunk_index=index)
+        for index in range(5)
+    ]
+
+    with pytest.raises(RuntimeError, match="simulated upsert failure"):
+        service.save_chunks(chunks, batch_size=2)
+
+    assert collection.delete_calls == []
+    assert old_id in collection.ids
+
+    collection.fail_upsert_call = None
+    saved_count = service.save_chunks(chunks, batch_size=2)
+
+    assert saved_count == 5
+    assert collection.delete_calls == [[old_id]]
+    assert collection.ids == {
+        service.build_chunk_id(chunk)
+        for chunk in chunks
+    }
+
+
+def test_save_chunks_rejects_invalid_batch_size(monkeypatch):
+    persistent_client = Mock()
+    monkeypatch.setattr(
+        service.chromadb,
+        "PersistentClient",
+        persistent_client,
+    )
+
+    with pytest.raises(ValueError, match="batch_size 必须大于 0"):
+        service.save_chunks([make_chunk()], batch_size=0)
+
+    persistent_client.assert_not_called()
+
+
+def test_save_chunks_rejects_duplicate_chunk_ids(monkeypatch):
+    collection = FakeCollection()
+    install_fake_chroma(monkeypatch, collection)
+    chunk = make_chunk()
+
+    with pytest.raises(ValueError, match="重复的 chunk_id"):
+        service.save_chunks([chunk, dict(chunk)])
+
+    assert collection.upsert_calls == []
 
 
 def test_verification_failure_does_not_delete_old_chunks(monkeypatch):
@@ -297,5 +409,284 @@ def test_query_rejects_invalid_input_before_opening_chroma(
             query_embedding,
             n_results,
         )
+
+    persistent_client.assert_not_called()
+
+
+def test_query_filters_active_generation(monkeypatch):
+    collection = Mock()
+    collection.query.return_value = {
+        "ids": [[]],
+        "documents": [[]],
+        "metadatas": [[]],
+        "distances": [[]],
+    }
+    client = Mock()
+    client.get_collection.return_value = collection
+    monkeypatch.setattr(
+        service.chromadb,
+        "PersistentClient",
+        Mock(return_value=client),
+    )
+
+    service.query_chunks(
+        "user-1",
+        "document-1",
+        [0.1],
+        3,
+        "generation-active",
+    )
+
+    assert collection.query.call_args.kwargs["where"] == {
+        "$and": [
+            {"user_id": "user-1"},
+            {
+                "$and": [
+                    {"document_id": "document-1"},
+                    {
+                        "index_generation_id": (
+                            "generation-active"
+                        )
+                    },
+                ]
+            },
+        ]
+    }
+
+
+def test_multi_document_query_filters_each_active_generation(monkeypatch):
+    collection = Mock()
+    collection.query.return_value = {
+        "ids": [[]],
+        "documents": [[]],
+        "metadatas": [[]],
+        "distances": [[]],
+    }
+    client = Mock()
+    client.get_collection.return_value = collection
+    monkeypatch.setattr(
+        service.chromadb,
+        "PersistentClient",
+        Mock(return_value=client),
+    )
+
+    service.query_chunks_by_documents(
+        "user-1",
+        ["document-1", "document-2"],
+        [0.1],
+        5,
+        {
+            "document-1": "generation-a",
+            "document-2": "generation-b",
+        },
+    )
+
+    where = collection.query.call_args.kwargs["where"]
+    assert where["$and"][0] == {"user_id": "user-1"}
+    assert where["$and"][1] == {
+        "$or": [
+            {
+                "$and": [
+                    {"document_id": "document-1"},
+                    {"index_generation_id": "generation-a"},
+                ]
+            },
+            {
+                "$and": [
+                    {"document_id": "document-2"},
+                    {"index_generation_id": "generation-b"},
+                ]
+            },
+        ]
+    }
+
+
+def test_real_chroma_query_returns_only_active_generations(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(service, "CHROMA_DIR", tmp_path)
+    chunks = [
+        make_chunk(
+            document_id="document-1",
+            text="old document one",
+            index_generation_id="generation-old-1",
+        ),
+        make_chunk(
+            document_id="document-1",
+            text="active document one",
+            index_generation_id="generation-active-1",
+        ),
+        make_chunk(
+            document_id="document-2",
+            text="old document two",
+            index_generation_id="generation-old-2",
+        ),
+        make_chunk(
+            document_id="document-2",
+            text="active document two",
+            index_generation_id="generation-active-2",
+        ),
+    ]
+    for chunk in chunks:
+        service.save_chunks([chunk])
+
+    result = service.query_chunks_by_documents(
+        "user-1",
+        ["document-1", "document-2"],
+        [0.1, 0.2],
+        10,
+        {
+            "document-1": "generation-active-1",
+            "document-2": "generation-active-2",
+        },
+    )
+
+    assert set(result["documents"][0]) == {
+        "active document one",
+        "active document two",
+    }
+    assert {
+        metadata["index_generation_id"]
+        for metadata in result["metadatas"][0]
+    } == {
+        "generation-active-1",
+        "generation-active-2",
+    }
+
+
+def test_failed_generation_cleanup_keeps_active_generation(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(service, "CHROMA_DIR", tmp_path)
+    failed_chunk = make_chunk(
+        text="failed generation",
+        index_generation_id="generation-failed",
+    )
+    active_chunk = make_chunk(
+        text="active generation",
+        index_generation_id="generation-active",
+    )
+    service.save_chunks([failed_chunk])
+    service.save_chunks([active_chunk])
+
+    deleted = service.delete_index_generation(
+        "user-1",
+        "document-1",
+        "generation-failed",
+    )
+
+    assert deleted == 1
+    active_result = service.query_chunks(
+        "user-1",
+        "document-1",
+        [0.1, 0.2],
+        3,
+        "generation-active",
+    )
+    failed_result = service.query_chunks(
+        "user-1",
+        "document-1",
+        [0.1, 0.2],
+        3,
+        "generation-failed",
+    )
+    assert active_result["documents"][0] == ["active generation"]
+    assert failed_result["documents"][0] == []
+
+
+def test_get_chunks_by_documents_uses_scoped_filter(monkeypatch):
+    class ReadCollection:
+        def __init__(self):
+            self.get_kwargs = None
+
+        def get(self, **kwargs):
+            self.get_kwargs = kwargs
+            return {
+                "ids": ["chunk-1", "chunk-2"],
+                "documents": ["RAG evidence", "LoRA evidence"],
+                "metadatas": [
+                    {
+                        "user_id": "user-1",
+                        "document_id": "document-1",
+                    },
+                    {
+                        "user_id": "user-1",
+                        "document_id": "document-2",
+                    },
+                ],
+            }
+
+    collection = ReadCollection()
+    client = Mock()
+    client.get_collection.return_value = collection
+    monkeypatch.setattr(
+        service.chromadb,
+        "PersistentClient",
+        Mock(return_value=client),
+    )
+
+    result = service.get_chunks_by_documents(
+        " user-1 ",
+        ["document-1", " document-2 ", "document-1"],
+    )
+
+    assert collection.get_kwargs == {
+        "where": {
+            "$and": [
+                {"user_id": "user-1"},
+                {
+                    "document_id": {
+                        "$in": ["document-1", "document-2"],
+                    }
+                },
+            ]
+        },
+        "include": ["documents", "metadatas"],
+    }
+    assert result == [
+        {
+            "chunk_id": "chunk-1",
+            "文本块": "RAG evidence",
+            "元数据": {
+                "user_id": "user-1",
+                "document_id": "document-1",
+            },
+        },
+        {
+            "chunk_id": "chunk-2",
+            "文本块": "LoRA evidence",
+            "元数据": {
+                "user_id": "user-1",
+                "document_id": "document-2",
+            },
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    ("user_id", "document_ids", "message"),
+    [
+        ("", ["document-1"], "user_id cannot be empty"),
+        ("user-1", [], "document_ids cannot be empty"),
+        ("user-1", [""], "document_id cannot be empty"),
+    ],
+)
+def test_get_chunks_by_documents_rejects_invalid_scope(
+    monkeypatch,
+    user_id,
+    document_ids,
+    message,
+):
+    persistent_client = Mock()
+    monkeypatch.setattr(
+        service.chromadb,
+        "PersistentClient",
+        persistent_client,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        service.get_chunks_by_documents(user_id, document_ids)
 
     persistent_client.assert_not_called()

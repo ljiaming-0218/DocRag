@@ -326,6 +326,38 @@ def test_ask_maps_invalid_request_to_400(
     }
 
 
+def test_ask_maps_document_not_ready_to_409(
+    client: TestClient,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        conversation_router,
+        "ask_conversation",
+        AsyncMock(
+            side_effect=conversation_router.DocumentNotReadyError(
+                "document-1",
+                "processing",
+                "embedding",
+                "文档索引尚未完成，当前阶段: embedding，请稍后再试",
+            )
+        ),
+    )
+
+    response = client.post(
+        "/conversations/conversation-1/ask",
+        json={
+            "user_id": "user-1",
+            "query": "总结这篇文档",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "DOCUMENT_NOT_READY",
+        "message": "文档索引尚未完成，当前阶段: embedding，请稍后再试",
+    }
+
+
 def test_ask_maps_validation_error_to_422(
     client: TestClient,
     monkeypatch,
@@ -596,6 +628,11 @@ def test_pdf_answer_preserves_llm_error_contract(
     client: TestClient,
     monkeypatch,
 ):
+    monkeypatch.setattr(
+        pdf_router,
+        "get_active_index_generation",
+        AsyncMock(return_value=None),
+    )
     monkeypatch.setattr(
         pdf_router,
         "search_relevant_chunks",

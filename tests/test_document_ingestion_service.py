@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call
 
 import pytest
 
@@ -12,6 +12,8 @@ def make_context(
     existing_document: bool = False,
     document_language: str = "unknown",
     index_fingerprint: str | None = None,
+    processing_status: str | None = None,
+    active_index_generation_id: str | None = None,
 ) -> dict:
     return {
         "文件名": "paper.pdf",
@@ -24,6 +26,8 @@ def make_context(
         "index_fingerprint": index_fingerprint,
         "index_config": None,
         "indexed_at": None,
+        "processing_status": processing_status,
+        "active_index_generation_id": active_index_generation_id,
     }
 
 
@@ -64,9 +68,12 @@ def install_index_dependencies(
         ),
         set_document_language=AsyncMock(),
         set_document_index_state=AsyncMock(),
+        set_document_processing_state=AsyncMock(),
         split_pages=Mock(return_value=chunks),
         embed_chunks=Mock(return_value=embedded_chunks),
         save_chunks=Mock(return_value=len(embedded_chunks)),
+        delete_index_generation=Mock(return_value=0),
+        invalidate_sparse_indexes=Mock(return_value=0),
     )
 
     for name, dependency in vars(dependencies).items():
@@ -120,7 +127,17 @@ async def test_new_document_builds_index(monkeypatch):
     )
     dependencies.embed_chunks.assert_called_once_with(chunks)
     dependencies.save_chunks.assert_called_once_with(embedded_chunks)
+    dependencies.invalidate_sparse_indexes.assert_called_once_with(
+        "user-1",
+        "document-1",
+    )
     dependencies.set_document_index_state.assert_awaited_once()
+    assert dependencies.set_document_processing_state.await_args_list == [
+        call("user-1", "document-1", "processing", "parsing"),
+        call("user-1", "document-1", "processing", "chunking"),
+        call("user-1", "document-1", "processing", "embedding"),
+        call("user-1", "document-1", "processing", "indexing"),
+    ]
     assert result["document_id"] == "document-1"
     assert result["总页数"] == 3
     assert result["总块数"] == 2
@@ -184,7 +201,10 @@ async def test_existing_index_skips_reprocessing(monkeypatch):
     dependencies.split_pages.assert_not_called()
     dependencies.embed_chunks.assert_not_called()
     dependencies.save_chunks.assert_not_called()
+    dependencies.invalidate_sparse_indexes.assert_not_called()
+    dependencies.delete_index_generation.assert_not_called()
     dependencies.set_document_index_state.assert_not_awaited()
+    dependencies.set_document_processing_state.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -326,6 +346,54 @@ async def test_force_reindex_rebuilds_matching_index(monkeypatch):
     dependencies.save_chunks.assert_called_once()
     dependencies.set_document_index_state.assert_awaited_once()
 
+    active_generation = result["active_index_generation_id"]
+    assert active_generation
+    saved_chunks = dependencies.save_chunks.call_args.args[0]
+    assert {
+        chunk["index_generation_id"]
+        for chunk in saved_chunks
+    } == {active_generation}
+    assert (
+        dependencies.set_document_index_state.await_args.kwargs[
+            "active_index_generation_id"
+        ]
+        == active_generation
+    )
+
+
+@pytest.mark.asyncio
+async def test_failed_reindex_reuses_previous_active_index(monkeypatch):
+    index_config = service.build_index_config("fixed", 500, 50)
+    dependencies = install_index_dependencies(
+        monkeypatch,
+        context=make_context(
+            existing_document=True,
+            document_language="en",
+            index_fingerprint=service.build_index_fingerprint(index_config),
+            processing_status="failed",
+            active_index_generation_id="generation-old",
+        ),
+        existing_chunks=True,
+    )
+
+    result = await service.index_document(
+        "user-1",
+        object(),
+        chunk_size=500,
+        chunk_overlap=50,
+    )
+
+    assert result["reindexed"] is False
+    dependencies.parse_document_pages.assert_not_awaited()
+    dependencies.save_chunks.assert_not_called()
+    dependencies.set_document_index_state.assert_not_awaited()
+    dependencies.set_document_processing_state.assert_awaited_once_with(
+        "user-1",
+        "document-1",
+        "completed",
+        "completed",
+    )
+
 
 @pytest.mark.asyncio
 async def test_empty_pages_stop_before_language_detection(monkeypatch):
@@ -431,7 +499,109 @@ async def test_vector_store_failure_is_propagated(monkeypatch):
 
     dependencies.embed_chunks.assert_called_once()
     dependencies.save_chunks.assert_called_once()
+    dependencies.invalidate_sparse_indexes.assert_not_called()
+    dependencies.delete_index_generation.assert_called_once()
     dependencies.set_document_index_state.assert_not_awaited()
+    failure_call = dependencies.set_document_processing_state.await_args_list[-1]
+    assert failure_call.args == (
+        "user-1",
+        "document-1",
+        "failed",
+        "indexing",
+    )
+    assert failure_call.kwargs["error_stage"] == "indexing"
+    assert failure_call.kwargs["error_code"] == "VECTOR_WRITE_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_cache_invalidation_failure_keeps_activated_generation(monkeypatch):
+    dependencies = install_index_dependencies(monkeypatch)
+    dependencies.invalidate_sparse_indexes.side_effect = RuntimeError(
+        "cache unavailable",
+    )
+
+    result = await service.index_document(
+        "user-1",
+        object(),
+        chunk_size=500,
+        chunk_overlap=50,
+    )
+
+    dependencies.set_document_index_state.assert_awaited_once()
+    dependencies.invalidate_sparse_indexes.assert_called_once_with(
+        "user-1",
+        "document-1",
+    )
+    dependencies.delete_index_generation.assert_not_called()
+    assert result["active_index_generation_id"]
+
+
+@pytest.mark.asyncio
+async def test_activation_failure_cleans_uncommitted_generation(monkeypatch):
+    dependencies = install_index_dependencies(monkeypatch)
+    dependencies.set_document_index_state.side_effect = RuntimeError(
+        "document state update failed",
+    )
+
+    with pytest.raises(RuntimeError, match="document state update failed"):
+        await service.index_document(
+            "user-1",
+            object(),
+            chunk_size=500,
+            chunk_overlap=50,
+        )
+
+    dependencies.delete_index_generation.assert_called_once()
+    dependencies.invalidate_sparse_indexes.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_embedding_failure_marks_document_failed(monkeypatch):
+    dependencies = install_index_dependencies(monkeypatch)
+    dependencies.embed_chunks.side_effect = RuntimeError(
+        "embedding model unavailable",
+    )
+
+    with pytest.raises(RuntimeError, match="embedding model unavailable"):
+        await service.index_document(
+            "user-1",
+            object(),
+            chunk_size=500,
+            chunk_overlap=50,
+        )
+
+    failure_call = dependencies.set_document_processing_state.await_args_list[-1]
+    assert failure_call.args[-2:] == ("failed", "embedding")
+    assert failure_call.kwargs["error_code"] == "EMBEDDING_FAILED"
+    dependencies.save_chunks.assert_not_called()
+    dependencies.set_document_index_state.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_incomplete_vector_write_does_not_finalize_index(monkeypatch):
+    embedded_chunks = [
+        {"文本块": "chunk 1", "embedding": [0.1]},
+        {"文本块": "chunk 2", "embedding": [0.2]},
+    ]
+    dependencies = install_index_dependencies(
+        monkeypatch,
+        chunks=[{"文本块": "chunk 1"}, {"文本块": "chunk 2"}],
+        embedded_chunks=embedded_chunks,
+    )
+    dependencies.save_chunks.return_value = 1
+
+    with pytest.raises(RuntimeError, match="向量写入数量不完整"):
+        await service.index_document(
+            "user-1",
+            object(),
+            chunk_size=500,
+            chunk_overlap=50,
+        )
+
+    dependencies.set_document_index_state.assert_not_awaited()
+    failure_call = dependencies.set_document_processing_state.await_args_list[-1]
+    assert failure_call.args[-2:] == ("failed", "indexing")
+    assert failure_call.kwargs["error_code"] == "VECTOR_WRITE_FAILED"
 
 
 @pytest.mark.asyncio

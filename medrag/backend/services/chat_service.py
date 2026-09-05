@@ -1,7 +1,10 @@
 from asyncio import to_thread
 
 from services.agent_router_service import route_task
-from services.document_service import get_existing_document_for_user
+from services.document_service import (
+    ensure_document_ready,
+    get_existing_document_for_user,
+)
 from services.knowledge_base_service import resolve_knowledge_base_scope
 from services.llm_service import generate_answer
 from services.message_service import (
@@ -91,17 +94,30 @@ async def prepare_ask_context(
         document_filenames = scope["document_filenames"]
         document_language = scope["language"]
         knowledge_base_name = scope["knowledge_base_name"]
+        index_generations = scope.get(
+            "index_generations",
+            {
+                document_id: None
+                for document_id in document_ids
+            },
+        )
     else:
         document = await get_existing_document_for_user(
             user_id,
             conversation["document_id"],
         )
+        ensure_document_ready(document)
         document_ids = [conversation["document_id"]]
         document_filenames = {
             document["_id"]: document["filename"],
         }
         document_language = document.get("language", "unknown")
         knowledge_base_name = None
+        index_generations = {
+            document["_id"]: document.get(
+                "active_index_generation_id"
+            )
+        }
     user = await get_existing_user(user_id)
 
     request_user_type = (
@@ -146,6 +162,7 @@ async def prepare_ask_context(
                 user_id,
                 document_ids,
                 rewritten_query,
+                index_generations=index_generations,
             )
             sources = summary_result["sources"]
             retrieval_queries = summary_result["retrieval_queries"]
@@ -155,6 +172,9 @@ async def prepare_ask_context(
                 user_id,
                 conversation["document_id"],
                 rewritten_query,
+                index_generation_id=index_generations.get(
+                    conversation["document_id"]
+                ),
             )
             sources = summary_result["sources"]
             retrieval_queries = summary_result["retrieval_queries"]
@@ -165,6 +185,7 @@ async def prepare_ask_context(
                 document_ids,
                 rewritten_query,
                 n_results,
+                index_generations,
             )
             retrieval_queries = [rewritten_query]
         else:
@@ -174,6 +195,7 @@ async def prepare_ask_context(
                 conversation["document_id"],
                 rewritten_query,
                 n_results,
+                index_generations.get(conversation["document_id"]),
             )
             retrieval_queries = [rewritten_query]
 

@@ -9,6 +9,7 @@ from routers import conversation_router
 from services import (
     chat_service,
     conversation_service,
+    document_service,
     knowledge_base_service,
     search_service,
     vector_store_service,
@@ -49,6 +50,7 @@ async def test_resolve_knowledge_base_scope_returns_selected_documents(
                     "user_id": "user-1",
                     "filename": "rag.pdf",
                     "language": "en",
+                    "processing_status": "completed",
                 }
             },
             {
@@ -57,6 +59,7 @@ async def test_resolve_knowledge_base_scope_returns_selected_documents(
                     "user_id": "user-1",
                     "filename": "lora.pdf",
                     "language": "en",
+                    "processing_status": "completed",
                 }
             },
         ]),
@@ -102,6 +105,82 @@ async def test_resolve_knowledge_base_scope_rejects_unlinked_document(
             "kb-1",
             ["document-from-another-user"],
         )
+
+
+@pytest.mark.asyncio
+async def test_resolve_knowledge_base_scope_rejects_failed_document(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        knowledge_base_service,
+        "find_knowledge_base_by_id",
+        AsyncMock(return_value=make_knowledge_base()),
+    )
+    monkeypatch.setattr(
+        knowledge_base_service,
+        "find_knowledge_base_document_records",
+        AsyncMock(return_value=[{
+            "document": {
+                "_id": "document-1",
+                "user_id": "user-1",
+                "filename": "rag.pdf",
+                "processing_status": "failed",
+                "processing_stage": "indexing",
+            }
+        }]),
+    )
+
+    with pytest.raises(
+        document_service.DocumentNotReadyError,
+        match="索引失败",
+    ):
+        await knowledge_base_service.resolve_knowledge_base_scope(
+            "user-1",
+            "kb-1",
+        )
+
+
+@pytest.mark.asyncio
+async def test_prepare_ask_context_rejects_unready_single_document(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        chat_service,
+        "find_conversation_by_id",
+        AsyncMock(return_value={
+            "_id": "conversation-1",
+            "user_id": "user-1",
+            "document_id": "document-1",
+            "kb_id": None,
+        }),
+    )
+    monkeypatch.setattr(
+        chat_service,
+        "get_existing_document_for_user",
+        AsyncMock(return_value={
+            "_id": "document-1",
+            "filename": "rag.pdf",
+            "processing_status": "processing",
+            "processing_stage": "embedding",
+        }),
+    )
+    create_message = AsyncMock()
+    rewrite_query = Mock()
+    monkeypatch.setattr(chat_service, "create_message", create_message)
+    monkeypatch.setattr(chat_service, "rewrite_query", rewrite_query)
+
+    with pytest.raises(
+        document_service.DocumentNotReadyError,
+        match="索引尚未完成",
+    ):
+        await chat_service.prepare_ask_context(
+            "user-1",
+            "conversation-1",
+            "What is RAG?",
+        )
+
+    create_message.assert_not_awaited()
+    rewrite_query.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -250,6 +329,7 @@ async def test_prepare_ask_context_uses_multi_document_search(monkeypatch):
         ["document-1", "document-2"],
         "What is RAG?",
         3,
+        {"document-1": None, "document-2": None},
     )
     legacy_document_lookup.assert_not_awaited()
 

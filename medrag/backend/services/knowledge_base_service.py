@@ -3,7 +3,10 @@ from uuid import uuid4
 
 from pymongo.errors import DuplicateKeyError
 
-from services.document_service import get_existing_document_for_user
+from services.document_service import (
+    ensure_document_ready,
+    get_existing_document_for_user,
+)
 from services.user_service import get_existing_user
 from stores.knowledge_base_store import (
     delete_knowledge_base,
@@ -234,6 +237,9 @@ async def resolve_knowledge_base_scope(
         documents_by_id[document_id]
         for document_id in document_ids
     ]
+    for document in selected_documents:
+        ensure_document_ready(document)
+
     languages = {
         document.get("language", "unknown")
         for document in selected_documents
@@ -247,6 +253,12 @@ async def resolve_knowledge_base_scope(
         "document_ids": document_ids,
         "document_filenames": {
             document["_id"]: document["filename"]
+            for document in selected_documents
+        },
+        "index_generations": {
+            document["_id"]: document.get(
+                "active_index_generation_id"
+            )
             for document in selected_documents
         },
         "language": language,

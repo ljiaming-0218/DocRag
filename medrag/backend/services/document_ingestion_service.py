@@ -4,6 +4,8 @@ import json
 from asyncio import to_thread
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
+from uuid import uuid4
 
 from fastapi import UploadFile
 
@@ -13,11 +15,13 @@ from services.document_service import (
     get_or_create_document,
     set_document_index_state,
     set_document_language,
+    set_document_processing_state,
 )
 from services.embedding_service import MODEL_NAME, embed_chunks
 from services.language_service import detect_document_language
 from services.pdf_parser_service import extract_pdf_pages
 from services.pdf_storage_service import temporary_pdf, upload_pdf
+from services.sparse_retrieval_service import invalidate_sparse_indexes
 from services.text_splitter_service import (
     DEFAULT_CHUNK_STRATEGY,
     get_chunk_version,
@@ -25,13 +29,45 @@ from services.text_splitter_service import (
     split_pages,
 )
 from services.user_service import get_existing_user
-from services.vector_store_service import has_chunks, save_chunks
+from services.vector_store_service import (
+    delete_index_generation,
+    has_chunks,
+    save_chunks,
+)
 
 
 logger = logging.getLogger(__name__)
 
 INDEX_VERSION = "v1"
 EMBEDDING_VERSION = "v1"
+
+STAGE_ERROR_CODES = {
+    "parsing": "PDF_PARSE_FAILED",
+    "chunking": "CHUNK_FAILED",
+    "embedding": "EMBEDDING_FAILED",
+    "indexing": "VECTOR_WRITE_FAILED",
+}
+
+
+def log_processing_stage(
+    context: dict,
+    stage: str,
+    started_at: float,
+    **details,
+) -> None:
+    detail_text = " ".join(
+        f"{key}={value}"
+        for key, value in details.items()
+    )
+    logger.info(
+        "document_processing_stage_completed "
+        "user_id=%s document_id=%s stage=%s elapsed_seconds=%.3f %s",
+        context["user_id"],
+        context["document_id"],
+        stage,
+        perf_counter() - started_at,
+        detail_text,
+    )
 
 
 def build_index_config(
@@ -109,8 +145,12 @@ async def prepare_document(user_id: str, file: UploadFile) -> dict:
         "existing_document": document_info["existing_document"],
         "document_language": document_info["language"],
         "index_fingerprint": document_info.get("index_fingerprint"),
+        "active_index_generation_id": document_info.get(
+            "active_index_generation_id"
+        ),
         "index_config": document_info.get("index_config"),
         "indexed_at": document_info.get("indexed_at"),
+        "processing_status": document_info.get("processing_status"),
     }
 
 
@@ -139,16 +179,28 @@ async def index_document(
             has_chunks,
             user["user_id"],
             context["document_id"],
+            context.get("active_index_generation_id"),
         )
 
     can_reuse_index = (
         existing_chunks
         and not force_reindex
         and context.get("index_fingerprint") == index_fingerprint
+        and (
+            context.get("active_index_generation_id")
+            or context.get("processing_status") in {None, "completed"}
+        )
     )
 
     if can_reuse_index:
         document_language = context["document_language"]
+        if context.get("processing_status") not in {None, "completed"}:
+            await set_document_processing_state(
+                user["user_id"],
+                context["document_id"],
+                "completed",
+                "completed",
+            )
         history = await list_conversations(
             user_id=user["user_id"],
             document_id=context["document_id"],
@@ -189,66 +241,210 @@ async def index_document(
             "reindexed": False,
             "force_reindex": False,
             "index_fingerprint": index_fingerprint,
+            "active_index_generation_id": context.get(
+                "active_index_generation_id"
+            ),
             "index_config": index_config,
             "indexed_at": context.get("indexed_at"),
             "document_language": document_language,
             "conversations": history,
         }
 
-    pages = await parse_document_pages(
-        context["save_path"],
-        context,
-    )
-    if not pages:
-        raise ValueError("PDF 未解析出有效页面")
+    current_stage = "parsing"
+    index_generation_id = str(uuid4())
+    generation_activated = False
+    processing_started_at = perf_counter()
+    try:
+        await set_document_processing_state(
+            user["user_id"],
+            context["document_id"],
+            "processing",
+            current_stage,
+        )
+        stage_started_at = perf_counter()
+        pages = await parse_document_pages(
+            context["save_path"],
+            context,
+        )
+        if not pages:
+            raise ValueError("PDF 未解析出有效页面")
 
-    document_language = await to_thread(
-        detect_document_language,
-        pages,
-    )
-    await set_document_language(
-        user["user_id"],
-        context["document_id"],
-        document_language,
-    )
+        document_language = await to_thread(
+            detect_document_language,
+            pages,
+        )
+        await set_document_language(
+            user["user_id"],
+            context["document_id"],
+            document_language,
+        )
+        log_processing_stage(
+            context,
+            current_stage,
+            stage_started_at,
+            page_count=len(pages),
+            document_language=document_language,
+        )
 
-    chunks = await to_thread(
-        split_pages,
-        pages,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        strategy=actual_strategy,
-    )
-    if not chunks:
-        raise ValueError("PDF 未生成有效文本块")
+        current_stage = "chunking"
+        await set_document_processing_state(
+            user["user_id"],
+            context["document_id"],
+            "processing",
+            current_stage,
+        )
+        stage_started_at = perf_counter()
+        chunks = await to_thread(
+            split_pages,
+            pages,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            strategy=actual_strategy,
+        )
+        if not chunks:
+            raise ValueError("PDF 未生成有效文本块")
 
-    for chunk in chunks:
-        chunk.update(index_config)
-        chunk["index_fingerprint"] = index_fingerprint
+        for chunk in chunks:
+            chunk.update(index_config)
+            chunk["index_fingerprint"] = index_fingerprint
+            chunk["index_generation_id"] = index_generation_id
+        log_processing_stage(
+            context,
+            current_stage,
+            stage_started_at,
+            chunk_count=len(chunks),
+            chunk_strategy=actual_strategy,
+        )
 
-    ocr_page_count = sum(
-        page.get("提取方式") == "ocr"
-        for page in pages
-    )
-    ocr_required_page_count = sum(
-        page.get("提取方式") == "ocr_required"
-        for page in pages
-    )
-    empty_page_count = sum(
-        not page.get("文本", "").strip()
-        for page in pages
-    )
+        ocr_page_count = sum(
+            page.get("提取方式") == "ocr"
+            for page in pages
+        )
+        ocr_required_page_count = sum(
+            page.get("提取方式") == "ocr_required"
+            for page in pages
+        )
+        empty_page_count = sum(
+            not page.get("文本", "").strip()
+            for page in pages
+        )
 
-    embedded_chunks = await to_thread(embed_chunks, chunks)
-    saved_count = await to_thread(save_chunks, embedded_chunks)
-    indexed_at = datetime.now(timezone.utc)
-    await set_document_index_state(
-        user["user_id"],
-        context["document_id"],
-        index_fingerprint,
-        index_config,
-        indexed_at,
-    )
+        current_stage = "embedding"
+        await set_document_processing_state(
+            user["user_id"],
+            context["document_id"],
+            "processing",
+            current_stage,
+        )
+        stage_started_at = perf_counter()
+        embedded_chunks = await to_thread(embed_chunks, chunks)
+        for chunk in embedded_chunks:
+            chunk.update(index_config)
+            chunk["index_fingerprint"] = index_fingerprint
+            chunk["index_generation_id"] = index_generation_id
+        log_processing_stage(
+            context,
+            current_stage,
+            stage_started_at,
+            chunk_count=len(embedded_chunks),
+        )
+
+        current_stage = "indexing"
+        await set_document_processing_state(
+            user["user_id"],
+            context["document_id"],
+            "processing",
+            current_stage,
+        )
+        stage_started_at = perf_counter()
+        saved_count = await to_thread(save_chunks, embedded_chunks)
+        if saved_count != len(embedded_chunks):
+            raise RuntimeError(
+                "向量写入数量不完整: "
+                f"expected={len(embedded_chunks)}, actual={saved_count}"
+            )
+        indexed_at = datetime.now(timezone.utc)
+        await set_document_index_state(
+            user["user_id"],
+            context["document_id"],
+            index_fingerprint,
+            index_config,
+            indexed_at,
+            active_index_generation_id=index_generation_id,
+        )
+        generation_activated = True
+        try:
+            invalidate_sparse_indexes(
+                user["user_id"],
+                context["document_id"],
+            )
+        except Exception:
+            logger.exception(
+                "sparse_index_invalidation_failed "
+                "user_id=%s document_id=%s generation_id=%s",
+                user["user_id"],
+                context["document_id"],
+                index_generation_id,
+            )
+        log_processing_stage(
+            context,
+            current_stage,
+            stage_started_at,
+            saved_count=saved_count,
+        )
+        logger.info(
+            "document_processing_completed "
+            "user_id=%s document_id=%s elapsed_seconds=%.3f",
+            user["user_id"],
+            context["document_id"],
+            perf_counter() - processing_started_at,
+        )
+    except Exception as exc:
+        error_code = STAGE_ERROR_CODES[current_stage]
+        if current_stage == "indexing" and not generation_activated:
+            try:
+                await to_thread(
+                    delete_index_generation,
+                    user["user_id"],
+                    context["document_id"],
+                    index_generation_id,
+                )
+            except Exception:
+                logger.exception(
+                    "failed_index_generation_cleanup_failed "
+                    "user_id=%s document_id=%s generation_id=%s",
+                    user["user_id"],
+                    context["document_id"],
+                    index_generation_id,
+                )
+        try:
+            await set_document_processing_state(
+                user["user_id"],
+                context["document_id"],
+                "failed",
+                current_stage,
+                error_stage=current_stage,
+                error_code=error_code,
+                error_message=str(exc)[:500],
+            )
+        except Exception:
+            logger.exception(
+                "document_processing_failure_state_update_failed "
+                "user_id=%s document_id=%s stage=%s error_code=%s",
+                user["user_id"],
+                context["document_id"],
+                current_stage,
+                error_code,
+            )
+        logger.exception(
+            "document_processing_failed "
+            "user_id=%s document_id=%s stage=%s error_code=%s",
+            user["user_id"],
+            context["document_id"],
+            current_stage,
+            error_code,
+        )
+        raise
 
     history = []
     if context["existing_document"]:
@@ -279,6 +475,7 @@ async def index_document(
         "reindexed": reindexed,
         "force_reindex": force_reindex,
         "index_fingerprint": index_fingerprint,
+        "active_index_generation_id": index_generation_id,
         "index_config": index_config,
         "indexed_at": indexed_at,
         "ocr_page_count": ocr_page_count,

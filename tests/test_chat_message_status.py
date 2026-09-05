@@ -209,6 +209,46 @@ async def test_successful_answer_marks_user_message_completed(
 
 
 @pytest.mark.asyncio
+async def test_no_evidence_rejects_without_calling_llm(monkeypatch):
+    context = make_ask_context()
+    context["sources"] = []
+    context["sources_count"] = 0
+    generate_answer = Mock()
+    create_message = AsyncMock(return_value={
+        "message_id": "assistant-message-1",
+    })
+
+    monkeypatch.setattr(
+        chat_service,
+        "route_task",
+        Mock(return_value="qa"),
+    )
+    monkeypatch.setattr(
+        chat_service,
+        "prepare_ask_context",
+        AsyncMock(return_value=context),
+    )
+    monkeypatch.setattr(chat_service, "generate_answer", generate_answer)
+    monkeypatch.setattr(chat_service, "create_message", create_message)
+    monkeypatch.setattr(
+        chat_service,
+        "set_message_status",
+        AsyncMock(),
+    )
+
+    result = await chat_service.ask_conversation(
+        "user-1",
+        "conversation-1",
+        "What is RAG?",
+    )
+
+    assert result["answer"] == chat_service.NO_SOURCE_ANSWER
+    assert result["sources"] == []
+    generate_answer.assert_not_called()
+    assert create_message.await_args.kwargs["sources"] == []
+
+
+@pytest.mark.asyncio
 async def test_llm_failure_marks_user_message_failed(monkeypatch):
     context = make_ask_context()
     set_status = AsyncMock()
