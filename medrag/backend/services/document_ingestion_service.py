@@ -12,8 +12,9 @@ from fastapi import UploadFile
 from services.chunk_validation_service import validate_chunk_params
 from services.conversation_service import list_conversations
 from services.document_service import (
+    IndexActivationConflictError,
+    activate_document_index_generation,
     get_or_create_document,
-    set_document_index_state,
     set_document_language,
     set_document_processing_state,
 )
@@ -252,6 +253,9 @@ async def index_document(
 
     current_stage = "parsing"
     index_generation_id = str(uuid4())
+    expected_active_generation_id = context.get(
+        "active_index_generation_id"
+    )
     generation_activated = False
     processing_started_at = perf_counter()
     try:
@@ -364,13 +368,16 @@ async def index_document(
                 f"expected={len(embedded_chunks)}, actual={saved_count}"
             )
         indexed_at = datetime.now(timezone.utc)
-        await set_document_index_state(
-            user["user_id"],
-            context["document_id"],
-            index_fingerprint,
-            index_config,
-            indexed_at,
-            active_index_generation_id=index_generation_id,
+        await activate_document_index_generation(
+            user_id=user["user_id"],
+            document_id=context["document_id"],
+            expected_active_generation_id=(
+                expected_active_generation_id
+            ),
+            new_active_generation_id=index_generation_id,
+            index_fingerprint=index_fingerprint,
+            index_config=index_config,
+            indexed_at=indexed_at,
         )
         generation_activated = True
         try:
@@ -417,6 +424,15 @@ async def index_document(
                     context["document_id"],
                     index_generation_id,
                 )
+        if isinstance(exc, IndexActivationConflictError):
+            logger.warning(
+                "index_generation_activation_conflict "
+                "user_id=%s document_id=%s generation_id=%s",
+                user["user_id"],
+                context["document_id"],
+                index_generation_id,
+            )
+            raise
         try:
             await set_document_processing_state(
                 user["user_id"],

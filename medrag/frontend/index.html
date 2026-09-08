@@ -22,6 +22,18 @@
           <label for="usernameInput">用户名</label>
           <input id="usernameInput" name="username" autocomplete="username" placeholder="例如：jiaming" required />
 
+          <label for="passwordInput">密码</label>
+          <input
+            id="passwordInput"
+            name="password"
+            type="password"
+            minlength="8"
+            maxlength="128"
+            autocomplete="current-password"
+            placeholder="至少 8 位"
+            required
+          />
+
           <label for="userTypeInput">默认回答模式</label>
           <select id="userTypeInput" name="default_user_type">
             <option value="general">普通用户</option>
@@ -32,12 +44,13 @@
             <option value="teacher">教师</option>
           </select>
 
-          <button id="authButton" class="primary-button" type="submit">进入 DocRAG</button>
+          <button id="authButton" class="primary-button" type="submit">登录</button>
+          <button id="registerButton" class="ghost-button" type="button">注册新用户</button>
           <div id="authStatus" class="status"></div>
         </form>
 
         <p class="auth-note">
-          当前是轻量用户模式：系统会根据用户名创建或获取用户，并在本地保存 user_id。
+          密码只用于登录验证，浏览器不会保存明文密码。
         </p>
       </div>
     </section>

@@ -17,6 +17,8 @@ from services.prompt_service import (
         ("这个结论的引用来源是什么？", "source_check"),
         ("提取本文的关键词和专业术语", "term"),
         ("总结这篇文献", "summary"),
+        ("这个库里面的文档都讲了些什么。", "summary"),
+        ("这些文档的主要内容是什么？", "summary"),
         ("LoRA 的核心机制是什么？", "qa"),
     ],
 )

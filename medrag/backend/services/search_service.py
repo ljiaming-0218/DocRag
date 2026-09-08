@@ -8,6 +8,7 @@ from services.retrieval_fusion_service import reciprocal_rank_fusion
 from services.sparse_retrieval_service import retrieve_sparse_candidates
 from services.summary_query_service import build_summary_subqueries
 from services.vector_store_service import (
+    get_chunks_by_documents,
     query_chunks,
     query_chunks_by_documents,
 )
@@ -15,6 +16,18 @@ from services.vector_store_service import (
 
 logger = logging.getLogger(__name__)
 SUPPORTED_RETRIEVAL_MODES = {"dense", "hybrid"}
+KNOWLEDGE_BASE_OVERVIEW_PHRASES = (
+    "这个库里面的文档",
+    "这个知识库里的文档",
+    "知识库中的文档",
+    "这些文档都讲",
+    "所有文档都讲",
+    "what do the documents",
+    "what the documents",
+    "documents in the current literature",
+    "overview of the documents",
+    "overview of this knowledge base",
+)
 
 
 def resolve_retrieval_mode() -> str:
@@ -372,6 +385,15 @@ def search_summary_chunks_for_documents(
     if context_k <= 0:
         raise ValueError("context_k must be greater than 0")
 
+    if is_knowledge_base_overview_query(query):
+        return search_knowledge_base_overview_chunks(
+            user_id,
+            document_ids,
+            query,
+            context_k=context_k,
+            index_generations=index_generations,
+        )
+
     seed_candidates = retrieve_candidate_chunks_for_documents(
         user_id,
         document_ids,
@@ -428,6 +450,120 @@ def search_summary_chunks_for_documents(
         "sources": select_diverse_chunks(ranked_chunks, context_k),
         "retrieval_queries": retrieval_queries,
     }
+
+
+def is_knowledge_base_overview_query(query: str) -> bool:
+    """Identify requests that need representative evidence from every document."""
+    normalized_query = " ".join(query.lower().split())
+    return any(
+        phrase in normalized_query
+        for phrase in KNOWLEDGE_BASE_OVERVIEW_PHRASES
+    )
+
+
+def search_knowledge_base_overview_chunks(
+    user_id: str,
+    document_ids: list[str],
+    query: str,
+    context_k: int,
+    index_generations: dict[str, str | None] | None = None,
+) -> dict:
+    """Select opening or abstract chunks from every active document."""
+    chunks = get_chunks_by_documents(
+        user_id,
+        document_ids,
+        index_generations,
+    )
+    if not chunks:
+        return {
+            "sources": [],
+            "retrieval_queries": [query],
+        }
+
+    return {
+        "sources": select_document_overview_chunks(
+            chunks,
+            document_ids,
+            query,
+            context_k,
+        ),
+        "retrieval_queries": [query],
+    }
+
+
+def select_document_overview_chunks(
+    chunks: list[dict],
+    document_ids: list[str],
+    query: str,
+    context_k: int,
+) -> list[dict]:
+    """Prefer each document's abstract and nearby opening content."""
+    chunks_by_document = {
+        document_id: []
+        for document_id in document_ids
+    }
+    for chunk in chunks:
+        metadata = chunk.get("元数据", {})
+        document_id = metadata.get("document_id")
+        if (
+            document_id in chunks_by_document
+            and is_useful_chunk(chunk.get("文本块", ""))
+        ):
+            chunks_by_document[document_id].append(chunk)
+
+    available_document_count = sum(
+        bool(document_chunks)
+        for document_chunks in chunks_by_document.values()
+    )
+    if available_document_count == 0:
+        return []
+
+    per_document_keep = max(
+        1,
+        min(2, context_k // available_document_count),
+    )
+    sources = []
+
+    for document_id in document_ids:
+        document_chunks = chunks_by_document[document_id]
+        document_chunks.sort(
+            key=lambda chunk: (
+                chunk["元数据"].get("page_number", float("inf")),
+                chunk["元数据"].get("chunk_index", float("inf")),
+            )
+        )
+        if not document_chunks:
+            continue
+
+        abstract_index = next(
+            (
+                index
+                for index, chunk in enumerate(document_chunks[:10])
+                if "abstract" in chunk["文本块"].lower()
+                or "摘要" in chunk["文本块"]
+            ),
+            None,
+        )
+        if abstract_index is None:
+            start_index = 1 if len(document_chunks) > 1 else 0
+        else:
+            start_index = abstract_index
+
+        selected_chunks = document_chunks[
+            start_index:start_index + per_document_keep
+        ]
+        for chunk in selected_chunks:
+            source = {
+                **chunk,
+                "距离": chunk.get("距离"),
+                "retrieval_sources": ["document_overview"],
+                "matched_queries": [query],
+            }
+            sources.append(source)
+            if len(sources) >= context_k:
+                return sources
+
+    return sources
 
 
 def merge_candidate_chunks(

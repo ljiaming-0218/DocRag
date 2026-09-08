@@ -39,7 +39,16 @@ def route_task(query: str) -> str:
 
     if any(
         keyword in normalized_query
-        for keyword in ["总结", "摘要", "概括", "归纳"]
+        for keyword in [
+            "总结",
+            "摘要",
+            "概括",
+            "归纳",
+            "都讲了什么",
+            "讲了些什么",
+            "主要讲什么",
+            "主要内容",
+        ]
     ):
         return "summary"
 

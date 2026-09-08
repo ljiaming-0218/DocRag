@@ -25,6 +25,7 @@ from routers.user_router import router as user_router
 from routers.conversation_router import router as conversation_router
 from routers.pdf_router import router as pdf_router
 from routers.knowledge_base_router import router as knowledge_base_router
+from routers.auth_router import router as auth_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,6 +69,7 @@ app.include_router(pdf_router)
 app.include_router(conversation_router)
 app.include_router(user_router)
 app.include_router(knowledge_base_router)
+app.include_router(auth_router)
 
 @app.get("/health")
 def health_check() -> dict:

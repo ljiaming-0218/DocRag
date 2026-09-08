@@ -67,7 +67,7 @@ def install_index_dependencies(
             return_value=document_language,
         ),
         set_document_language=AsyncMock(),
-        set_document_index_state=AsyncMock(),
+        activate_document_index_generation=AsyncMock(),
         set_document_processing_state=AsyncMock(),
         split_pages=Mock(return_value=chunks),
         embed_chunks=Mock(return_value=embedded_chunks),
@@ -131,7 +131,7 @@ async def test_new_document_builds_index(monkeypatch):
         "user-1",
         "document-1",
     )
-    dependencies.set_document_index_state.assert_awaited_once()
+    dependencies.activate_document_index_generation.assert_awaited_once()
     assert dependencies.set_document_processing_state.await_args_list == [
         call("user-1", "document-1", "processing", "parsing"),
         call("user-1", "document-1", "processing", "chunking"),
@@ -203,7 +203,7 @@ async def test_existing_index_skips_reprocessing(monkeypatch):
     dependencies.save_chunks.assert_not_called()
     dependencies.invalidate_sparse_indexes.assert_not_called()
     dependencies.delete_index_generation.assert_not_called()
-    dependencies.set_document_index_state.assert_not_awaited()
+    dependencies.activate_document_index_generation.assert_not_awaited()
     dependencies.set_document_processing_state.assert_not_awaited()
 
 
@@ -316,7 +316,7 @@ async def test_stale_index_fingerprint_triggers_reindex(
     assert result["index_config"]["chunk_strategy"] == "recursive"
     dependencies.parse_document_pages.assert_awaited_once()
     dependencies.save_chunks.assert_called_once()
-    dependencies.set_document_index_state.assert_awaited_once()
+    dependencies.activate_document_index_generation.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -344,7 +344,7 @@ async def test_force_reindex_rebuilds_matching_index(monkeypatch):
     assert result["force_reindex"] is True
     dependencies.parse_document_pages.assert_awaited_once()
     dependencies.save_chunks.assert_called_once()
-    dependencies.set_document_index_state.assert_awaited_once()
+    dependencies.activate_document_index_generation.assert_awaited_once()
 
     active_generation = result["active_index_generation_id"]
     assert active_generation
@@ -354,8 +354,8 @@ async def test_force_reindex_rebuilds_matching_index(monkeypatch):
         for chunk in saved_chunks
     } == {active_generation}
     assert (
-        dependencies.set_document_index_state.await_args.kwargs[
-            "active_index_generation_id"
+        dependencies.activate_document_index_generation.await_args.kwargs[
+            "new_active_generation_id"
         ]
         == active_generation
     )
@@ -386,7 +386,7 @@ async def test_failed_reindex_reuses_previous_active_index(monkeypatch):
     assert result["reindexed"] is False
     dependencies.parse_document_pages.assert_not_awaited()
     dependencies.save_chunks.assert_not_called()
-    dependencies.set_document_index_state.assert_not_awaited()
+    dependencies.activate_document_index_generation.assert_not_awaited()
     dependencies.set_document_processing_state.assert_awaited_once_with(
         "user-1",
         "document-1",
@@ -501,7 +501,7 @@ async def test_vector_store_failure_is_propagated(monkeypatch):
     dependencies.save_chunks.assert_called_once()
     dependencies.invalidate_sparse_indexes.assert_not_called()
     dependencies.delete_index_generation.assert_called_once()
-    dependencies.set_document_index_state.assert_not_awaited()
+    dependencies.activate_document_index_generation.assert_not_awaited()
     failure_call = dependencies.set_document_processing_state.await_args_list[-1]
     assert failure_call.args == (
         "user-1",
@@ -527,7 +527,7 @@ async def test_cache_invalidation_failure_keeps_activated_generation(monkeypatch
         chunk_overlap=50,
     )
 
-    dependencies.set_document_index_state.assert_awaited_once()
+    dependencies.activate_document_index_generation.assert_awaited_once()
     dependencies.invalidate_sparse_indexes.assert_called_once_with(
         "user-1",
         "document-1",
@@ -539,7 +539,7 @@ async def test_cache_invalidation_failure_keeps_activated_generation(monkeypatch
 @pytest.mark.asyncio
 async def test_activation_failure_cleans_uncommitted_generation(monkeypatch):
     dependencies = install_index_dependencies(monkeypatch)
-    dependencies.set_document_index_state.side_effect = RuntimeError(
+    dependencies.activate_document_index_generation.side_effect = RuntimeError(
         "document state update failed",
     )
 
@@ -553,6 +553,48 @@ async def test_activation_failure_cleans_uncommitted_generation(monkeypatch):
 
     dependencies.delete_index_generation.assert_called_once()
     dependencies.invalidate_sparse_indexes.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_activation_conflict_cleans_generation_without_marking_failed(
+    monkeypatch,
+):
+    dependencies = install_index_dependencies(
+        monkeypatch,
+        context=make_context(
+            existing_document=True,
+            active_index_generation_id="generation-old",
+        ),
+        existing_chunks=True,
+    )
+    dependencies.activate_document_index_generation.side_effect = (
+        service.IndexActivationConflictError("generation changed")
+    )
+
+    with pytest.raises(
+        service.IndexActivationConflictError,
+        match="generation changed",
+    ):
+        await service.index_document(
+            "user-1",
+            object(),
+            chunk_size=500,
+            chunk_overlap=50,
+            force_reindex=True,
+        )
+
+    activation_kwargs = (
+        dependencies.activate_document_index_generation.await_args.kwargs
+    )
+    assert activation_kwargs["expected_active_generation_id"] == (
+        "generation-old"
+    )
+    dependencies.delete_index_generation.assert_called_once()
+    dependencies.invalidate_sparse_indexes.assert_not_called()
+    assert all(
+        state_call.args[2] != "failed"
+        for state_call in dependencies.set_document_processing_state.await_args_list
+    )
 
 
 @pytest.mark.asyncio
@@ -574,7 +616,7 @@ async def test_embedding_failure_marks_document_failed(monkeypatch):
     assert failure_call.args[-2:] == ("failed", "embedding")
     assert failure_call.kwargs["error_code"] == "EMBEDDING_FAILED"
     dependencies.save_chunks.assert_not_called()
-    dependencies.set_document_index_state.assert_not_awaited()
+    dependencies.activate_document_index_generation.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -598,7 +640,7 @@ async def test_incomplete_vector_write_does_not_finalize_index(monkeypatch):
             chunk_overlap=50,
         )
 
-    dependencies.set_document_index_state.assert_not_awaited()
+    dependencies.activate_document_index_generation.assert_not_awaited()
     failure_call = dependencies.set_document_processing_state.await_args_list[-1]
     assert failure_call.args[-2:] == ("failed", "indexing")
     assert failure_call.kwargs["error_code"] == "VECTOR_WRITE_FAILED"

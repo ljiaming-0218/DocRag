@@ -111,3 +111,50 @@ async def test_index_state_update_switches_active_generation(monkeypatch):
     assert update["$set"]["active_index_generation_id"] == (
         "generation-new"
     )
+
+
+@pytest.mark.asyncio
+async def test_generation_activation_compares_previous_pointer(monkeypatch):
+    collection = install_document_collection(monkeypatch)
+    indexed_at = datetime(2026, 9, 7, tzinfo=timezone.utc)
+
+    activated = await document_store.compare_and_set_document_index_generation(
+        user_id="user-1",
+        document_id="document-1",
+        expected_active_generation_id="generation-old",
+        new_active_generation_id="generation-new",
+        index_fingerprint="fingerprint-new",
+        index_config={"index_version": "v1"},
+        indexed_at=indexed_at,
+    )
+
+    assert activated is True
+    document_filter, update = collection.update_one.await_args.args
+    assert document_filter == {
+        "_id": "document-1",
+        "user_id": "user-1",
+        "active_index_generation_id": "generation-old",
+    }
+    assert update["$set"]["active_index_generation_id"] == "generation-new"
+    assert update["$set"]["processing_status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_first_generation_accepts_missing_or_null_pointer(monkeypatch):
+    collection = install_document_collection(monkeypatch)
+
+    await document_store.compare_and_set_document_index_generation(
+        user_id="user-1",
+        document_id="document-1",
+        expected_active_generation_id=None,
+        new_active_generation_id="generation-first",
+        index_fingerprint="fingerprint-first",
+        index_config={"index_version": "v1"},
+        indexed_at=datetime(2026, 9, 7, tzinfo=timezone.utc),
+    )
+
+    document_filter = collection.update_one.await_args.args[0]
+    assert document_filter["$or"] == [
+        {"active_index_generation_id": {"$exists": False}},
+        {"active_index_generation_id": None},
+    ]

@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from services.user_service import get_existing_user
 from stores.document_store import (
+    compare_and_set_document_index_generation,
     find_document_by_user_and_hash,
     find_document_by_user_and_id,
     find_documents_by_user,
@@ -22,6 +23,10 @@ PROCESSING_STAGES = {
     "indexing",
     "completed",
 }
+
+
+class IndexActivationConflictError(RuntimeError):
+    """Raised when another rebuild changed the active generation first."""
 
 
 class DocumentNotReadyError(RuntimeError):
@@ -231,6 +236,30 @@ async def set_document_index_state(
         )
     if not updated:
         raise ValueError("文档不存在或不属于当前用户")
+
+
+async def activate_document_index_generation(
+    user_id: str,
+    document_id: str,
+    expected_active_generation_id: str | None,
+    new_active_generation_id: str,
+    index_fingerprint: str,
+    index_config: dict,
+    indexed_at: datetime,
+) -> None:
+    activated = await compare_and_set_document_index_generation(
+        user_id=user_id,
+        document_id=document_id,
+        expected_active_generation_id=expected_active_generation_id,
+        new_active_generation_id=new_active_generation_id,
+        index_fingerprint=index_fingerprint,
+        index_config=index_config,
+        indexed_at=indexed_at,
+    )
+    if not activated:
+        raise IndexActivationConflictError(
+            "文档索引在重建期间已被其他任务更新，请重试",
+        )
 
 
 async def set_document_processing_state(

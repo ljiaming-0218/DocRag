@@ -186,6 +186,11 @@ def test_hybrid_failure_falls_back_to_dense(
         "rerank_chunks",
         Mock(side_effect=lambda _query, chunks, _top_k: chunks),
     )
+    monkeypatch.setattr(
+        service,
+        "filter_relevant_evidence",
+        Mock(side_effect=lambda chunks: chunks),
+    )
 
     result = service.search_relevant_chunks(
         "user-1",
@@ -313,3 +318,91 @@ def test_summary_filters_only_after_final_global_rerank(monkeypatch):
         "summarize the paper",
     ]
     assert result["sources"] == []
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "这个库里面的文档都讲了些什么？",
+        "What do the documents in the current literature cover?",
+    ],
+)
+def test_knowledge_base_overview_query_is_detected(query):
+    assert service.is_knowledge_base_overview_query(query) is True
+
+
+def test_knowledge_base_overview_preserves_document_coverage(monkeypatch):
+    document_ids = ["document-1", "document-2", "document-3"]
+    chunks = []
+    for document_id in document_ids:
+        chunks.extend([
+            make_candidate(
+                f"{document_id} title and authors",
+                document_id=document_id,
+                chunk_index=0,
+            ),
+            make_candidate(
+                f"Abstract: {document_id} research objective",
+                document_id=document_id,
+                chunk_index=1,
+            ),
+            make_candidate(
+                f"{document_id} method and conclusion",
+                document_id=document_id,
+                chunk_index=2,
+            ),
+        ])
+    read_chunks = Mock(return_value=chunks)
+    monkeypatch.setattr(
+        service,
+        "get_chunks_by_documents",
+        read_chunks,
+    )
+    summary_queries = Mock()
+    monkeypatch.setattr(
+        service,
+        "build_summary_subqueries",
+        summary_queries,
+    )
+
+    result = service.search_summary_chunks_for_documents(
+        "user-1",
+        document_ids,
+        "What do the documents in the current literature cover?",
+        per_query_k=2,
+        per_query_keep=2,
+        context_k=6,
+        index_generations={
+            document_id: f"generation-{document_id[-1]}"
+            for document_id in document_ids
+        },
+    )
+
+    returned_document_ids = [
+        source["元数据"]["document_id"]
+        for source in result["sources"]
+    ]
+    assert returned_document_ids == [
+        "document-1",
+        "document-1",
+        "document-2",
+        "document-2",
+        "document-3",
+        "document-3",
+    ]
+    assert result["retrieval_queries"] == [
+        "What do the documents in the current literature cover?"
+    ]
+    assert result["sources"][0]["文本块"].startswith("Abstract:")
+    assert result["sources"][1]["文本块"].endswith(
+        "method and conclusion"
+    )
+    read_chunks.assert_called_once_with(
+        "user-1",
+        document_ids,
+        {
+            document_id: f"generation-{document_id[-1]}"
+            for document_id in document_ids
+        },
+    )
+    summary_queries.assert_not_called()

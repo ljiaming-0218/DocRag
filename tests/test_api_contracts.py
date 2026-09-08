@@ -1,7 +1,7 @@
 from unittest.mock import ANY, AsyncMock, Mock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from api_errors import (
@@ -10,15 +10,18 @@ from api_errors import (
     request_validation_error_handler,
 )
 from routers import (
+    auth_router,
     conversation_router,
     pdf_router,
     user_router,
 )
+from dependencies.auth import get_current_user_id
 from services.llm_service import LLMServiceError
 
 @pytest.fixture
 def client():
     app = FastAPI()
+    app.include_router(auth_router.router)
     app.include_router(user_router.router)
     app.include_router(conversation_router.router)
     app.include_router(pdf_router.router)
@@ -30,62 +33,87 @@ def client():
         RequestValidationError,
         request_validation_error_handler,
     )
+
+    async def test_user_id(request: Request) -> str:
+        query_user_id = request.query_params.get("user_id")
+        if query_user_id:
+            return query_user_id
+        if request.url.path.startswith("/users/"):
+            return request.url.path.split("/")[2]
+        if request.headers.get("content-type", "").startswith(
+            "application/json"
+        ):
+            payload = await request.json()
+            if isinstance(payload, dict) and payload.get("user_id"):
+                return payload["user_id"]
+        return "user-1"
+
+    app.dependency_overrides[get_current_user_id] = test_user_id
     with TestClient(app) as test_client:
         yield test_client
 
 
-def test_create_user_returns_user_contract(
+def test_register_returns_token_and_user_contract(
     client: TestClient,
     monkeypatch,
 ):
-    create_user = AsyncMock(return_value={
-        "user_id": "user-1",
-        "username": "test-user",
-        "default_user_type": "general",
-        "created": True,
+    register = AsyncMock(return_value={
+        "access_token": "token-1",
+        "token_type": "bearer",
+        "user": {
+            "user_id": "user-1",
+            "username": "test-user",
+            "default_user_type": "general",
+        },
     })
     monkeypatch.setattr(
-        user_router,
-        "create_or_get_user",
-        create_user,
+        auth_router,
+        "register_user",
+        register,
     )
 
     response = client.post(
-        "/users",
+        "/auth/register",
         json={
             "username": "test-user",
+            "password": "password-123",
             "default_user_type": "general",
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json() == {
-        "user_id": "user-1",
-        "username": "test-user",
-        "default_user_type": "general",
-        "created": True,
+        "access_token": "token-1",
+        "token_type": "bearer",
+        "user": {
+            "user_id": "user-1",
+            "username": "test-user",
+            "default_user_type": "general",
+        },
     }
-    create_user.assert_awaited_once_with(
+    register.assert_awaited_once_with(
         "test-user",
+        "password-123",
         "general",
     )
 
 
-def test_create_user_rejects_empty_username(
+def test_register_rejects_empty_username(
     client: TestClient,
     monkeypatch,
 ):
-    create_user = AsyncMock()
+    register = AsyncMock()
     monkeypatch.setattr(
-        user_router,
-        "create_or_get_user",
-        create_user,
+        auth_router,
+        "register_user",
+        register,
     )
 
     response = client.post(
-        "/users",
+        "/auth/register",
         json={
             "username": "",
+            "password": "password-123",
             "default_user_type": "general",
         },
     )
@@ -95,30 +123,31 @@ def test_create_user_rejects_empty_username(
         "error": "VALIDATION_ERROR",
         "message": "请求参数校验失败",
     }
-    create_user.assert_not_awaited()
+    register.assert_not_awaited()
 
 
-def test_create_user_maps_invalid_request_to_error_contract(
+def test_register_maps_invalid_request_to_error_contract(
     client: TestClient,
     monkeypatch,
 ):
     monkeypatch.setattr(
-        user_router,
-        "create_or_get_user",
+        auth_router,
+        "register_user",
         AsyncMock(side_effect=ValueError("非法的用户类型")),
     )
 
     response = client.post(
-        "/users",
+        "/auth/register",
         json={
             "username": "test-user",
+            "password": "password-123",
             "default_user_type": "invalid",
         },
     )
 
     assert response.status_code == 400
     assert response.json() == {
-        "error": "INVALID_USER_REQUEST",
+        "error": "INVALID_REGISTRATION",
         "message": "非法的用户类型",
     }
 
@@ -536,6 +565,44 @@ def test_index_pdf_maps_runtime_error_to_500(
         "message": "向量数据库写入失败",
     }
     index_document.assert_awaited_once()
+
+
+def test_index_pdf_maps_activation_conflict_to_409(
+    client: TestClient,
+    monkeypatch,
+):
+    index_document = AsyncMock(
+        side_effect=pdf_router.IndexActivationConflictError(
+            "文档索引在重建期间已被其他任务更新，请重试"
+        )
+    )
+    monkeypatch.setattr(
+        pdf_router,
+        "index_document",
+        index_document,
+    )
+
+    response = client.post(
+        "/pdf/index",
+        params={
+            "user_id": "user-1",
+            "chunk_size": 500,
+            "chunk_overlap": 50,
+        },
+        files={
+            "file": (
+                "paper.pdf",
+                b"%PDF-1.4 test",
+                "application/pdf",
+            )
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "INDEX_ACTIVATION_CONFLICT",
+        "message": "文档索引在重建期间已被其他任务更新，请重试",
+    }
 
 
 def test_parse_pdf_returns_non_persistent_preview(

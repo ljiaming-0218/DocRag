@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Query
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from api_errors import APIError
+from dependencies.auth import get_current_user_id, require_matching_user
 from services.knowledge_base_service import (
     add_document_to_knowledge_base,
     create_knowledge_base,
@@ -46,10 +49,15 @@ def _raise_api_error(error: Exception) -> None:
 @router.post("", status_code=201)
 async def create_knowledge_base_endpoint(
     request: CreateKnowledgeBaseRequest,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
     try:
-        return await create_knowledge_base(
+        user_id = require_matching_user(
+            authenticated_user_id,
             request.user_id,
+        )
+        return await create_knowledge_base(
+            user_id,
             request.name,
             request.description,
         )
@@ -59,10 +67,12 @@ async def create_knowledge_base_endpoint(
 
 @router.get("")
 async def list_knowledge_bases_endpoint(
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     user_id: str = Query(...),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> list[dict]:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         return await list_knowledge_bases(user_id, limit)
     except (ValueError, LookupError, PermissionError) as error:
         _raise_api_error(error)
@@ -71,9 +81,11 @@ async def list_knowledge_bases_endpoint(
 @router.get("/{kb_id}")
 async def get_knowledge_base_endpoint(
     kb_id: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     user_id: str = Query(...),
 ) -> dict:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         return await get_knowledge_base(user_id, kb_id)
     except (ValueError, LookupError, PermissionError) as error:
         _raise_api_error(error)
@@ -83,10 +95,15 @@ async def get_knowledge_base_endpoint(
 async def update_knowledge_base_endpoint(
     kb_id: str,
     request: UpdateKnowledgeBaseRequest,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
     try:
-        return await edit_knowledge_base(
+        user_id = require_matching_user(
+            authenticated_user_id,
             request.user_id,
+        )
+        return await edit_knowledge_base(
+            user_id,
             kb_id,
             request.name,
             request.description,
@@ -98,9 +115,11 @@ async def update_knowledge_base_endpoint(
 @router.delete("/{kb_id}")
 async def delete_knowledge_base_endpoint(
     kb_id: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     user_id: str = Query(...),
 ) -> dict:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         return await remove_knowledge_base(user_id, kb_id)
     except (ValueError, LookupError, PermissionError) as error:
         _raise_api_error(error)
@@ -111,10 +130,15 @@ async def add_document_to_knowledge_base_endpoint(
     kb_id: str,
     document_id: str,
     request: KnowledgeBaseDocumentRequest,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
     try:
-        return await add_document_to_knowledge_base(
+        user_id = require_matching_user(
+            authenticated_user_id,
             request.user_id,
+        )
+        return await add_document_to_knowledge_base(
+            user_id,
             kb_id,
             document_id,
         )
@@ -125,10 +149,12 @@ async def add_document_to_knowledge_base_endpoint(
 @router.get("/{kb_id}/documents")
 async def list_knowledge_base_documents_endpoint(
     kb_id: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     user_id: str = Query(...),
     limit: int = Query(default=100, ge=1, le=100),
 ) -> list[dict]:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         return await list_knowledge_base_documents(user_id, kb_id, limit)
     except (ValueError, LookupError, PermissionError) as error:
         _raise_api_error(error)
@@ -138,9 +164,11 @@ async def list_knowledge_base_documents_endpoint(
 async def remove_document_from_knowledge_base_endpoint(
     kb_id: str,
     document_id: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     user_id: str = Query(...),
 ) -> dict:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         return await remove_document_from_knowledge_base(
             user_id,
             kb_id,

@@ -107,10 +107,17 @@ function loadSavedUser() {
 }
 
 function requireUser() {
-  if (!currentUser || !currentUser.user_id) {
+  if (!currentUser || !currentUser.user_id || !currentUser.access_token) {
     throw new Error("请先登录或注册用户。");
   }
   return currentUser;
+}
+
+async function authorizedFetch(input, options = {}) {
+  const user = requireUser();
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${user.access_token}`);
+  return fetch(input, { ...options, headers });
 }
 
 function showAuthView() {
@@ -132,47 +139,89 @@ function renderActiveUser() {
   $("answerUserType").value = currentUser.default_user_type || "general";
 }
 
-async function createOrLoginUser(username, defaultUserType) {
-  const response = await fetch(`${getApiBase()}/users`, {
+async function authenticateUser(path, payload) {
+  const response = await fetch(`${getApiBase()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      username,
-      default_user_type: defaultUserType,
-    }),
+    body: JSON.stringify(payload),
   });
 
   return parseResponse(response);
+}
+
+async function completeAuthentication(authResult) {
+  resetUserWorkspace();
+  saveCurrentUser({
+    ...authResult.user,
+    access_token: authResult.access_token,
+  });
+  showAppView();
+  await loadKnowledgeBases();
+  await loadDocuments();
+  await loadConversations();
+}
+
+function readCredentials() {
+  return {
+    username: $("usernameInput").value.trim(),
+    password: $("passwordInput").value,
+    defaultUserType: $("userTypeInput").value,
+  };
+}
+
+function setAuthButtonsDisabled(disabled) {
+  $("authButton").disabled = disabled;
+  $("registerButton").disabled = disabled;
 }
 
 async function handleAuthSubmit(event) {
   event.preventDefault();
   clearStatus("authStatus");
 
-  const username = $("usernameInput").value.trim();
-  const defaultUserType = $("userTypeInput").value;
+  const { username, password } = readCredentials();
 
-  if (!username) {
-    setStatus("authStatus", "请输入用户名。", "error");
+  if (!username || password.length < 8) {
+    setStatus("authStatus", "请输入用户名和至少 8 位密码。", "error");
     return;
   }
 
-  $("authButton").disabled = true;
+  setAuthButtonsDisabled(true);
 
   try {
-    const user = await createOrLoginUser(username, defaultUserType);
-    resetUserWorkspace();
-    saveCurrentUser(user);
-    showAppView();
-    await loadKnowledgeBases();
-    await loadDocuments();
-    await loadConversations();
+    const result = await authenticateUser("/auth/login", {
+      username,
+      password,
+    });
+    await completeAuthentication(result);
   } catch (error) {
     setStatus("authStatus", error.message, "error");
   } finally {
-    $("authButton").disabled = false;
+    setAuthButtonsDisabled(false);
+  }
+}
+
+async function handleRegister() {
+  clearStatus("authStatus");
+  const { username, password, defaultUserType } = readCredentials();
+  if (!username || password.length < 8) {
+    setStatus("authStatus", "请输入用户名和至少 8 位密码。", "error");
+    return;
+  }
+
+  setAuthButtonsDisabled(true);
+  try {
+    const result = await authenticateUser("/auth/register", {
+      username,
+      password,
+      default_user_type: defaultUserType,
+    });
+    await completeAuthentication(result);
+  } catch (error) {
+    setStatus("authStatus", error.message, "error");
+  } finally {
+    setAuthButtonsDisabled(false);
   }
 }
 
@@ -237,7 +286,7 @@ async function loadKnowledgeBases() {
       user_id: user.user_id,
       limit: 50,
     });
-    const response = await fetch(url);
+    const response = await authorizedFetch(url);
     const data = await parseResponse(response);
     knowledgeBases = Array.isArray(data) ? data : [];
     renderKnowledgeBaseList();
@@ -305,7 +354,7 @@ async function handleCreateKnowledgeBase() {
   button.disabled = true;
   clearStatus("knowledgeBaseStatus");
   try {
-    const response = await fetch(`${getApiBase()}/knowledge-bases`, {
+    const response = await authorizedFetch(`${getApiBase()}/knowledge-bases`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -364,7 +413,7 @@ async function loadKnowledgeBaseDocuments(kbId = currentKnowledgeBaseId) {
       `/knowledge-bases/${encodeURIComponent(kbId)}/documents`,
       { user_id: user.user_id, limit: 100 }
     );
-    const response = await fetch(url);
+    const response = await authorizedFetch(url);
     const data = await parseResponse(response);
     knowledgeBaseDocuments = Array.isArray(data) ? data : [];
     const availableIds = new Set(
@@ -416,7 +465,7 @@ function renderKnowledgeBaseDocuments() {
 
 async function linkDocumentToKnowledgeBase(kbId, documentId) {
   const user = requireUser();
-  const response = await fetch(
+  const response = await authorizedFetch(
     `${getApiBase()}/knowledge-bases/${encodeURIComponent(kbId)}/documents/${encodeURIComponent(documentId)}`,
     {
       method: "POST",
@@ -436,7 +485,7 @@ async function loadDocuments() {
       `/users/${encodeURIComponent(user.user_id)}/documents`,
       { limit: 50 }
     );
-    const response = await fetch(url);
+    const response = await authorizedFetch(url);
     const data = await parseResponse(response);
     documents = Array.isArray(data) ? data : [];
     renderDocumentList();
@@ -524,7 +573,7 @@ async function createConversation(userId, scope, title) {
     title,
     ...scope,
   };
-  const response = await fetch(`${getApiBase()}/conversations`, {
+  const response = await authorizedFetch(`${getApiBase()}/conversations`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -545,7 +594,7 @@ async function loadConversations() {
     };
 
     const url = buildUrl("/conversations", params);
-    const response = await fetch(url);
+    const response = await authorizedFetch(url);
 
     conversations = await parseResponse(response);
     renderConversationList();
@@ -621,7 +670,7 @@ async function selectConversation(conversationId) {
     const url = buildUrl(`/conversations/${encodeURIComponent(conversationId)}/messages`, {
       user_id: user.user_id,
     });
-    const response = await fetch(url);
+    const response = await authorizedFetch(url);
     const messages = await parseResponse(response);
     renderMessages(messages);
   } catch (error) {
@@ -949,7 +998,7 @@ async function requestPdfIndex(userId, file, chunkSize, chunkOverlap) {
     chunk_size: chunkSize,
     chunk_overlap: chunkOverlap,
   });
-  const response = await fetch(url, {
+  const response = await authorizedFetch(url, {
     method: "POST",
     body: formData,
   });
@@ -1192,7 +1241,7 @@ async function searchChunks() {
       query,
       n_results: topK,
     });
-    const response = await fetch(url, { method: "POST" });
+    const response = await authorizedFetch(url, { method: "POST" });
     const data = await parseResponse(response);
 
     setStatus("searchStatus", `检索完成，共找到 ${data.sources_count ?? 0} 条相关内容。`, "success");
@@ -1266,7 +1315,7 @@ async function answerQuestion() {
   setStatus("answerStatus", "正在生成回答。", "info");
 
   try {
-    const response = await fetch(`${getApiBase()}/conversations/${encodeURIComponent(conversationId)}/ask`, {
+    const response = await authorizedFetch(`${getApiBase()}/conversations/${encodeURIComponent(conversationId)}/ask`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1297,6 +1346,7 @@ async function answerQuestion() {
 
 function bindEvents() {
   $("authForm").addEventListener("submit", handleAuthSubmit);
+  $("registerButton").addEventListener("click", handleRegister);
   $("logoutButton").addEventListener("click", logout);
   $("newConversationButton").addEventListener("click", startBlankConversation);
   $("createKnowledgeBaseButton").addEventListener(
@@ -1355,10 +1405,20 @@ async function initApp() {
   }
 
   currentUser = savedUser;
-  showAppView();
-  await loadKnowledgeBases();
-  await loadDocuments();
-  await loadConversations();
+  try {
+    const response = await authorizedFetch(`${getApiBase()}/auth/me`);
+    const user = await parseResponse(response);
+    saveCurrentUser({
+      ...user,
+      access_token: savedUser.access_token,
+    });
+    showAppView();
+    await loadKnowledgeBases();
+    await loadDocuments();
+    await loadConversations();
+  } catch {
+    logout();
+  }
 }
 
 initApp();

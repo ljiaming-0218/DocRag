@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 APP_JS = ROOT_DIR / "medrag" / "frontend" / "app.js"
 INDEX_HTML = ROOT_DIR / "medrag" / "frontend" / "index.html"
+STYLES_CSS = ROOT_DIR / "medrag" / "frontend" / "styles.css"
 
 
 def test_upload_finalizers_do_not_read_conversation_before_creation():
@@ -49,6 +50,29 @@ def test_frontend_calls_knowledge_base_contracts():
     assert "/knowledge-bases/${encodeURIComponent(kbId)}/documents" in source
     assert "selected_document_ids" in source
     assert "currentKnowledgeBaseId" in source
+
+
+def test_frontend_uses_bearer_authentication_for_business_requests():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert 'id="passwordInput"' in html
+    assert 'id="registerButton"' in html
+    assert "async function authorizedFetch" in source
+    assert 'headers.set("Authorization"' in source
+    assert 'authenticateUser("/auth/login"' in source
+    assert 'authenticateUser("/auth/register"' in source
+
+
+def test_register_button_is_visible_on_light_auth_card():
+    styles = STYLES_CSS.read_text(encoding="utf-8")
+
+    rule_start = styles.index(".auth-card .ghost-button {")
+    rule_end = styles.index("}", rule_start)
+    rule = styles[rule_start:rule_end]
+
+    assert "background: #fff" in rule
+    assert "color: var(--primary-dark)" in rule
 
 
 def test_document_library_explains_single_document_conversation_flow():

@@ -209,6 +209,31 @@ async def test_set_document_index_state_rejects_missing_document(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_generation_activation_reports_compare_and_set_conflict(
+    monkeypatch,
+):
+    compare_and_set = AsyncMock(return_value=False)
+    monkeypatch.setattr(
+        document_service,
+        "compare_and_set_document_index_generation",
+        compare_and_set,
+    )
+
+    with pytest.raises(document_service.IndexActivationConflictError):
+        await document_service.activate_document_index_generation(
+            user_id="user-1",
+            document_id="document-1",
+            expected_active_generation_id="generation-old",
+            new_active_generation_id="generation-new",
+            index_fingerprint="fingerprint-new",
+            index_config={"index_version": "v1"},
+            indexed_at=datetime(2026, 9, 7, tzinfo=timezone.utc),
+        )
+
+    compare_and_set.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_set_document_processing_state_updates_owned_document(
     monkeypatch,
 ):

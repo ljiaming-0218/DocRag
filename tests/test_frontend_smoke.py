@@ -72,12 +72,15 @@ def test_frontend_complete_smoke(tmp_path: Path):
         request = route.request
         url = request.url
 
-        if url.endswith("/users") and request.method == "POST":
+        if url.endswith("/auth/login") and request.method == "POST":
             return json_response(route, {
-                "user_id": "user-smoke",
-                "username": "smoke-user",
-                "default_user_type": "general",
-                "created": True,
+                "access_token": "token-smoke",
+                "token_type": "bearer",
+                "user": {
+                    "user_id": "user-smoke",
+                    "username": "smoke-user",
+                    "default_user_type": "general",
+                },
             })
         if "/users/user-smoke/documents" in url:
             return json_response(route, [document] if index_calls else [])
@@ -130,6 +133,7 @@ def test_frontend_complete_smoke(tmp_path: Path):
         page.goto(base_url, wait_until="networkidle")
 
         page.locator("#usernameInput").fill("smoke-user")
+        page.locator("#passwordInput").fill("password-123")
         page.locator("#authButton").click()
         page.locator("#appView:not(.hidden)").wait_for()
 
@@ -199,12 +203,15 @@ def test_frontend_knowledge_base_smoke(tmp_path: Path):
         request = route.request
         url = request.url
 
-        if url.endswith("/users") and request.method == "POST":
+        if url.endswith("/auth/login") and request.method == "POST":
             return json_response(route, {
-                "user_id": "user-smoke",
-                "username": "smoke-user",
-                "default_user_type": "general",
-                "created": True,
+                "access_token": "token-smoke",
+                "token_type": "bearer",
+                "user": {
+                    "user_id": "user-smoke",
+                    "username": "smoke-user",
+                    "default_user_type": "general",
+                },
             })
         if "/users/user-smoke/documents" in url:
             return json_response(route, [document] if document_linked else [])
@@ -296,6 +303,7 @@ def test_frontend_knowledge_base_smoke(tmp_path: Path):
         page.goto(base_url, wait_until="networkidle")
 
         page.locator("#usernameInput").fill("smoke-user")
+        page.locator("#passwordInput").fill("password-123")
         page.locator("#authButton").click()
         page.locator("#appView:not(.hidden)").wait_for()
 
@@ -354,14 +362,17 @@ def test_frontend_user_switch_clears_draft_and_error_state():
         request = route.request
         url = request.url
 
-        if url.endswith("/users") and request.method == "POST":
+        if url.endswith("/auth/login") and request.method == "POST":
             payload = request.post_data_json
             username = payload["username"]
             return json_response(route, {
-                "user_id": f"user-{username}",
-                "username": username,
-                "default_user_type": "general",
-                "created": True,
+                "access_token": f"token-{username}",
+                "token_type": "bearer",
+                "user": {
+                    "user_id": f"user-{username}",
+                    "username": username,
+                    "default_user_type": "general",
+                },
             })
         if "/documents" in url and request.method == "GET":
             return json_response(route, [])
@@ -382,6 +393,7 @@ def test_frontend_user_switch_clears_draft_and_error_state():
         page.route("**/*", handle)
 
         page.locator("#usernameInput").fill("first")
+        page.locator("#passwordInput").fill("password-123")
         page.locator("#authButton").click()
         page.locator("#appView:not(.hidden)").wait_for()
         page.evaluate("""
@@ -396,6 +408,7 @@ def test_frontend_user_switch_clears_draft_and_error_state():
 
         page.locator("#logoutButton").click()
         page.locator("#usernameInput").fill("second")
+        page.locator("#passwordInput").fill("password-123")
         page.locator("#authButton").click()
         page.locator("#appView:not(.hidden)").wait_for()
 
@@ -429,12 +442,15 @@ def test_frontend_multi_pdf_upload_is_sequential(tmp_path: Path):
         request = route.request
         url = request.url
 
-        if url.endswith("/users") and request.method == "POST":
+        if url.endswith("/auth/login") and request.method == "POST":
             return json_response(route, {
-                "user_id": "user-batch",
-                "username": "batch-user",
-                "default_user_type": "general",
-                "created": True,
+                "access_token": "token-batch",
+                "token_type": "bearer",
+                "user": {
+                    "user_id": "user-batch",
+                    "username": "batch-user",
+                    "default_user_type": "general",
+                },
             })
         if "/users/user-batch/documents" in url:
             return json_response(
@@ -480,6 +496,7 @@ def test_frontend_multi_pdf_upload_is_sequential(tmp_path: Path):
         page.goto(base_url, wait_until="networkidle")
 
         page.locator("#usernameInput").fill("batch-user")
+        page.locator("#passwordInput").fill("password-123")
         page.locator("#authButton").click()
         page.locator("#appView:not(.hidden)").wait_for()
 

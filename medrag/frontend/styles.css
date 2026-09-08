@@ -497,6 +497,18 @@ input[type="file"] {
   text-align: center;
 }
 
+.auth-card .ghost-button {
+  border-color: #a7f3d0;
+  background: #fff;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.auth-card .ghost-button:hover {
+  border-color: var(--primary);
+  background: #ecfdf5;
+}
+
 button:disabled {
   background: #6b7280 !important;
   color: #d1d5db;

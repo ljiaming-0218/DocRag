@@ -46,7 +46,7 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 - 通过 `user_id + document_hash` 识别同一用户重复上传的相同文件，避免重复解析和索引。
 - 根据切片参数、切片版本、Embedding 模型和索引版本生成 `index_fingerprint`；只有指纹一致才复用旧索引。
 - `/pdf/index` 支持 `force_reindex=true`，用于忽略旧指纹并强制重建同一 `document_id` 的向量索引。
-- 每次重建生成独立 `index_generation_id`，新代次完整写入并验证后才切换 MongoDB 中的 active generation；Dense 与 BM25 检索只读取当前 active 版本。
+- 每次重建生成独立 `index_generation_id`，新代次完整写入并验证后通过 compare-and-set 切换 MongoDB 中的 active generation；并发冲突时清理未激活代次，Dense 与 BM25 检索只读取当前 active 版本。
 - 对疑似扫描页支持可选的 Tesseract 中英文 OCR 回退。
 - 记录文档主要语言，用于跨语言 Query Rewrite。
 - 持久化 `parsing/chunking/embedding/indexing` 处理阶段和失败原因，只有完整写入并校验后才将索引标记为完成。
@@ -76,8 +76,9 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 
 ### 用户与多轮会话
 
-- 支持轻量用户创建或选择，并保存默认 `user_type`。
-- 文档和会话按 `user_id` 进行逻辑隔离。
+- 支持用户名、密码注册与登录；密码使用 Argon2 哈希后存入 MongoDB。
+- 登录成功后签发 JWT，受保护接口从 `Authorization: Bearer <token>` 解析当前用户。
+- 文档和会话按认证得到的 `user_id` 进行归属校验与逻辑隔离。
 - 同一文档可创建多个 conversation，也可继续历史会话。
 - user 和 assistant 消息持久化到 MongoDB。
 - assistant 消息保存 `sources`、`rewritten_query`、`retrieval_queries` 和 `task_type`。
@@ -291,6 +292,8 @@ copy .env.example .env
 OPENROUTER_API_KEY=your_key
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_MODEL=your_model
+JWT_SECRET_KEY=replace-with-a-long-random-secret
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=120
 RETRIEVAL_MODE=dense
 EVIDENCE_RERANK_MIN_SCORE=
 EMBEDDING_BATCH_SIZE=32
@@ -336,7 +339,9 @@ set TRANSFORMERS_OFFLINE=1
 | --- | --- |
 | `GET /health` | 服务存活检查 |
 | `GET /ready` | 检查数据库等关键依赖是否就绪 |
-| `POST /users` | 创建或获取轻量用户 |
+| `POST /auth/register` | 注册用户并返回 JWT |
+| `POST /auth/login` | 校验用户名和密码并返回 JWT |
+| `GET /auth/me` | 根据 JWT 获取当前用户信息 |
 | `POST /pdf/parse` | 临时解析 PDF 并返回分页文本；响应后删除临时文件，不创建 Document 或索引 |
 | `POST /pdf/chunks` | 临时预览切分结果；不写入 MongoDB 或 Chroma |
 | `POST /pdf/index` | 去重、解析、版本化切分、向量化并建立索引；支持 `force_reindex` |
@@ -387,7 +392,7 @@ D:\Anaconda\envs\medrag\python.exe -m pytest -q
 当前全量工程测试基线：
 
 ```text
-154 passed
+255 passed
 ```
 
 测试包含业务单元测试、接口契约测试和前端 smoke test。大量外部依赖通过 Mock 隔离，因此不能替代 MongoDB、Chroma、真实模型和完整接口的集成测试。
@@ -435,8 +440,9 @@ python eval\calculate_metrics.py
 
 ## 工程边界
 
-- 当前是轻量用户模式，`user_id` 由前端保存并传入，不等同于密码登录、Session 或 JWT 鉴权。
-- `user_id + document_id` 用于资源归属和逻辑隔离，但客户端仍可能伪造 `user_id`。
+- 当前已实现 Argon2 密码哈希、JWT 登录态和受保护接口身份校验；兼容期请求仍携带 `user_id`，但后端会与 JWT 身份比对，不直接信任客户端字段。
+- JWT 当前保存在浏览器 `localStorage`，尚未实现 HttpOnly Cookie、Refresh Token、Token 吊销和 RBAC。
+- 旧版无 `password_hash` 的轻量用户无法直接登录，需要重新注册新账号或由管理员执行受控迁移，系统不会自动认领旧身份。
 - OCR 只解决扫描页文字提取；复杂表格、公式、图表语义和普通图片尚未接入视觉模型。
 - Chroma 使用本地文件持久化，免费云实例重启后可能丢失索引。
 - `/health` 当前属于存活检查，不验证 MongoDB、Chroma、模型和 LLM 供应商的可用性。
@@ -444,13 +450,13 @@ python eval\calculate_metrics.py
 - 知识库删除涉及 MongoDB 多个集合，目前没有事务保证跨集合原子性。
 - `/pdf/search` 调试接口仍以单文档为主，多文档问答通过 conversation 主链路执行。
 - 多文档工程链路已经完成，但尚未形成固定的多文档检索效果基线。
-- 现阶段仍缺少真实鉴权、完整监控指标、并发测试和容量测试。
+- 现阶段仍缺少 Token 吊销与刷新机制、完整监控指标、并发测试和容量测试。
 
 ## 后续计划
 
 1. 固定多文档评估集，验证整库检索、部分文档检索、跨文档比较和越权隔离。
 2. 分析多文档候选覆盖、全局 Rerank 排名、引用准确性和延迟，形成可复现基线。
-3. 在基线稳定后实现 Hybrid Retrieval，引入 BM25、RRF、候选去重和证据阈值。
+3. 固化 Hybrid Retrieval 评估，对比 Dense、Dense + Rerank 和 Hybrid + RRF + Rerank。
 4. 补充 MongoDB/Chroma 真实集成测试、结构化日志、请求级追踪和依赖 readiness。
 5. 达到实际容量瓶颈后再通过 benchmark 决定是否从 Chroma 迁移到 Qdrant 或 Milvus。
 

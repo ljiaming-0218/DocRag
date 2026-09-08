@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Query
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from api_errors import APIError
 from services.llm_service import LLMServiceError
@@ -6,6 +8,7 @@ from services.document_service import DocumentNotReadyError
 from services.message_service import list_messages
 from services.conversation_service import create_conversation,list_conversations
 from services.chat_service import ask_conversation
+from dependencies.auth import get_current_user_id, require_matching_user
 router = APIRouter(
     prefix="/conversations",
     tags=["conversations"],
@@ -26,10 +29,17 @@ class AskConversationRequest(BaseModel):
     user_type: str | None = None
 
 @router.post("", status_code=201)
-async def create_conversation_endpoint(request: CreateConversationRequest,) -> dict:
+async def create_conversation_endpoint(
+    request: CreateConversationRequest,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict:
     try:
+        user_id = require_matching_user(
+            authenticated_user_id,
+            request.user_id,
+        )
         conversation = await create_conversation(
-            user_id=request.user_id,
+            user_id=user_id,
             document_id=request.document_id,
             title=request.title,
             kb_id=request.kb_id,
@@ -46,12 +56,14 @@ async def create_conversation_endpoint(request: CreateConversationRequest,) -> d
 
 @router.get("")
 async def list_conversations_endpoint(
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     user_id: str = Query(...),
     document_id: str | None = Query(default=None),
     kb_id: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> list[dict]:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         return await list_conversations(
             user_id=user_id,
             document_id=document_id,
@@ -66,9 +78,16 @@ async def list_conversations_endpoint(
         ) from error
 
 @router.get("/{conversation_id}/messages")
-async def list_messages_endpoint(conversation_id: str, user_id: str = Query(...)) -> list[dict]:
+async def list_messages_endpoint(
+    conversation_id: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: str = Query(...),
+) -> list[dict]:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         return await list_messages(user_id, conversation_id)
+    except APIError:
+        raise
     except PermissionError as error:
         raise APIError(
             status_code=403,
@@ -93,16 +112,23 @@ async def list_messages_endpoint(conversation_id: str, user_id: str = Query(...)
 async def ask_conversation_endpoint(
     conversation_id: str,
     request: AskConversationRequest,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
     try:
-        result = await ask_conversation(
+        user_id = require_matching_user(
+            authenticated_user_id,
             request.user_id,
+        )
+        result = await ask_conversation(
+            user_id,
             conversation_id,
             request.query,
             request.history_limit,
             request.n_results,
             request.user_type,
         )
+    except APIError:
+        raise
     except DocumentNotReadyError as error:
         raise APIError(
             status_code=409,

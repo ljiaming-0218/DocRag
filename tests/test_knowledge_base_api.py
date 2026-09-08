@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 
@@ -11,6 +11,7 @@ from api_errors import (
     request_validation_error_handler,
 )
 from routers import knowledge_base_router
+from dependencies.auth import get_current_user_id
 
 
 @pytest.fixture
@@ -22,6 +23,15 @@ def client():
         RequestValidationError,
         request_validation_error_handler,
     )
+
+    async def test_user_id(request: Request) -> str:
+        query_user_id = request.query_params.get("user_id")
+        if query_user_id:
+            return query_user_id
+        payload = await request.json()
+        return payload.get("user_id", "user-1")
+
+    app.dependency_overrides[get_current_user_id] = test_user_id
     with TestClient(app) as test_client:
         yield test_client
 

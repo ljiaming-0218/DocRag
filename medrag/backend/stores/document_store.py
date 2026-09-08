@@ -125,6 +125,56 @@ async def update_document_index_state(
     return result.matched_count == 1
 
 
+async def compare_and_set_document_index_generation(
+    user_id: str,
+    document_id: str,
+    expected_active_generation_id: str | None,
+    new_active_generation_id: str,
+    index_fingerprint: str,
+    index_config: dict,
+    indexed_at: datetime,
+) -> bool:
+    """Activate a generation only when the active pointer is unchanged."""
+    database = get_database()
+    collection = database["documents"]
+
+    document_filter: dict = {
+        "_id": document_id,
+        "user_id": user_id,
+    }
+    if expected_active_generation_id is None:
+        document_filter["$or"] = [
+            {"active_index_generation_id": {"$exists": False}},
+            {"active_index_generation_id": None},
+        ]
+    else:
+        document_filter["active_index_generation_id"] = (
+            expected_active_generation_id
+        )
+
+    result = await collection.update_one(
+        document_filter,
+        {
+            "$set": {
+                "index_fingerprint": index_fingerprint,
+                "index_config": index_config,
+                "indexed_at": indexed_at,
+                "active_index_generation_id": new_active_generation_id,
+                "processing_status": "completed",
+                "processing_stage": "completed",
+                "processed_at": indexed_at,
+                "updated_at": indexed_at,
+            },
+            "$unset": {
+                "error_stage": "",
+                "error_code": "",
+                "error_message": "",
+            },
+        },
+    )
+    return result.matched_count == 1
+
+
 async def update_document_processing_state(
     user_id: str,
     document_id: str,

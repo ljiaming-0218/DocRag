@@ -407,6 +407,11 @@ def test_multi_document_search_reranks_global_candidates(monkeypatch):
         query,
     )
     monkeypatch.setattr(search_service, "rerank_chunks", rerank)
+    monkeypatch.setattr(
+        search_service,
+        "filter_relevant_evidence",
+        Mock(side_effect=lambda chunks: chunks),
+    )
 
     result = search_service.search_relevant_chunks_for_documents(
         "user-1",
@@ -467,6 +472,9 @@ def test_prompt_context_identifies_source_document():
 def test_create_conversation_api_accepts_knowledge_base_scope(monkeypatch):
     app = FastAPI()
     app.include_router(conversation_router.router)
+    app.dependency_overrides[
+        conversation_router.get_current_user_id
+    ] = lambda: "user-1"
     create = AsyncMock(return_value={
         "conversation_id": "conversation-1",
         "document_id": None,

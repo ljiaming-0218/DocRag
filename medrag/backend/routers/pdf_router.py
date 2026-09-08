@@ -1,12 +1,16 @@
 import logging
 from asyncio import to_thread
-from fastapi import APIRouter, File, UploadFile
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, UploadFile
 
 from api_errors import APIError
+from dependencies.auth import get_current_user_id, require_matching_user
 from services.chunk_validation_service import validate_chunk_params
 from services.llm_service import LLMServiceError, generate_answer
 from services.document_service import (
     DocumentNotReadyError,
+    IndexActivationConflictError,
     ensure_document_ready,
     get_existing_document_for_user,
 )
@@ -31,6 +35,12 @@ router = APIRouter(
 
 
 def raise_pdf_error(error: Exception) -> None:
+    if isinstance(error, IndexActivationConflictError):
+        raise APIError(
+            status_code=409,
+            code="INDEX_ACTIVATION_CONFLICT",
+            message=str(error),
+        ) from error
     if isinstance(error, DocumentNotReadyError):
         raise APIError(
             status_code=409,
@@ -61,8 +71,15 @@ async def get_active_index_generation(
 
 
 @router.post("/search")
-async def search_pdf(user_id: str, document_id: str, query: str, n_results: int = 3) -> dict:
+async def search_pdf(
+    user_id: str,
+    document_id: str,
+    query: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
+    n_results: int = 3,
+) -> dict:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         index_generation_id = await get_active_index_generation(
             user_id,
             document_id,
@@ -90,6 +107,7 @@ async def search_pdf(user_id: str, document_id: str, query: str, n_results: int 
 @router.post("/index")
 async def index_pdfs(
     user_id: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     file: UploadFile = File(...),
     chunk_size: int = 500,
     chunk_overlap: int = 50,
@@ -97,6 +115,7 @@ async def index_pdfs(
     force_reindex: bool = False,
 ) -> dict:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         return await index_document(
             user_id=user_id,
             file=file,
@@ -111,9 +130,11 @@ async def index_pdfs(
 @router.post("/parse")
 async def parse_pdf(
     user_id: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     file: UploadFile = File(...),
 ) -> dict:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         return await preview_pdf_pages(user_id, file)
     except (ValueError, RuntimeError) as error:
         raise_pdf_error(error)
@@ -121,11 +142,13 @@ async def parse_pdf(
 @router.post("/chunks")
 async def parse_pdf_chunks(
     user_id: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     file: UploadFile = File(...),
     chunk_size: int = 500,
     chunk_overlap: int = 50,
 ) -> dict:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         validate_chunk_params(chunk_size, chunk_overlap)
         context = await preview_pdf_pages(user_id, file)
         chunks = await to_thread(
@@ -147,8 +170,15 @@ async def parse_pdf_chunks(
     }
 
 @router.post("/prompt-preview")
-async def preview_rag_prompt(user_id: str, document_id: str, query: str, n_results: int = 3) -> dict:
+async def preview_rag_prompt(
+    user_id: str,
+    document_id: str,
+    query: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
+    n_results: int = 3,
+) -> dict:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         index_generation_id = await get_active_index_generation(
             user_id,
             document_id,
@@ -181,9 +211,11 @@ async def answer_pdf_question(
     user_id: str,
     document_id: str,
     query: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     n_results: int = 3,
 ) -> dict:
     try:
+        user_id = require_matching_user(authenticated_user_id, user_id)
         index_generation_id = await get_active_index_generation(
             user_id,
             document_id,
