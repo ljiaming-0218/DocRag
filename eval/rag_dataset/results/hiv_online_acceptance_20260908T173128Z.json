@@ -1,0 +1,321 @@
+{
+  "run_id": "20260908T173128Z",
+  "base_url": "https://maoxiao-1205-medrag.hf.space",
+  "started_at": "2026-09-08T17:31:28.885580+00:00",
+  "checks": [
+    {
+      "name": "health",
+      "passed": true,
+      "detail": "{'status': 'ok', 'service': 'docrag'}"
+    },
+    {
+      "name": "ready_before",
+      "passed": false,
+      "detail": "{'status': 'not_ready', 'checks': {'mongodb': 'ok', 'chroma_directory': 'failed', 'upload_directory': 'failed', 'llm_config': 'ok'}}"
+    },
+    {
+      "name": "authenticated_identity",
+      "passed": true,
+      "detail": "{'user_id': '4d5dd17e-7ae3-46d7-b836-7577965d1e95', 'username': 'hiv-accept-20260908t173128z', 'default_user_type': 'researcher', 'created_at': '2026-09-08T17:31:35.435000', 'updated_at': '2026-09-08T17:31:35.435000', 'created': False}"
+    },
+    {
+      "name": "duplicate_upload_reuses_document",
+      "passed": true,
+      "detail": "{'document_id': '8c65cd9d-85a6-4e13-ab5e-05f0f6b69db8', 'existing_document': True, 'reindexed': False}"
+    },
+    {
+      "name": "knowledge_base_contains_six_documents",
+      "passed": true,
+      "detail": "document_count=6"
+    },
+    {
+      "name": "conversation_history_persisted",
+      "passed": true,
+      "detail": "message_count=12"
+    },
+    {
+      "name": "cross_user_access_blocked",
+      "passed": true,
+      "detail": "status_code=403"
+    },
+    {
+      "name": "ready_after",
+      "passed": true,
+      "detail": "{'status': 'ready', 'checks': {'mongodb': 'ok', 'chroma_directory': 'ok', 'upload_directory': 'ok', 'llm_config': 'ok'}}"
+    }
+  ],
+  "indexing": [
+    {
+      "document_key": "hitanet",
+      "filename": "HiTANet-Hierarchical Time-Aware Attention Networks for RiskPrediction on Electronic Health Records.pdf",
+      "document_id": "8c65cd9d-85a6-4e13-ab5e-05f0f6b69db8",
+      "elapsed_seconds": 17.637,
+      "chunk_count": 152,
+      "active_index_generation_id": "1deeb7db-178e-4090-bc29-960bfdeb4b88"
+    },
+    {
+      "document_key": "ehrshot",
+      "filename": "EHRSHOT-An EHR Benchmark for Few-Shot.pdf",
+      "document_id": "db80b0ae-f645-47c1-8772-603653b6e7ae",
+      "elapsed_seconds": 15.581,
+      "chunk_count": 121,
+      "active_index_generation_id": "a10dc825-e653-48ed-a1cc-4d7ec13e7be0"
+    },
+    {
+      "document_key": "smart",
+      "filename": "SMART-Towards Pre-trained Missing-Aware Model.pdf",
+      "document_id": "48488394-8217-4404-80d5-31026af9e760",
+      "elapsed_seconds": 24.057,
+      "chunk_count": 227,
+      "active_index_generation_id": "f534420d-ccdc-48fa-b55a-793aefc45f9f"
+    },
+    {
+      "document_key": "gatortron",
+      "filename": "A large language model for electronic health records.pdf",
+      "document_id": "76268c9b-90d0-4654-a720-329804389f8b",
+      "elapsed_seconds": 9.824,
+      "chunk_count": 139,
+      "active_index_generation_id": "84fd37a6-fd9f-4119-8201-7f4eeb43ce3c"
+    },
+    {
+      "document_key": "xtsformer",
+      "filename": "Cross-Temporal-Scale Transformer for Irregular-Time Event Prediction in Clinical Applications.pdf",
+      "document_id": "e9ed3699-3cd8-4d60-8667-554e83ff9b7c",
+      "elapsed_seconds": 9.208,
+      "chunk_count": 112,
+      "active_index_generation_id": "b7b4b08c-d413-4c47-838b-9f35a85c5bde"
+    },
+    {
+      "document_key": "hiv_pipeline",
+      "filename": "ocad217.pdf",
+      "document_id": "7a387e36-d73c-44ae-ac81-11f0371e70aa",
+      "elapsed_seconds": 14.961,
+      "chunk_count": 106,
+      "active_index_generation_id": "6c1d6148-3219-4fd4-9bbb-a538d7627d9a"
+    }
+  ],
+  "rag_cases": [
+    {
+      "case_id": "HIV-KB-SUMMARY",
+      "query": "这个知识库中的六篇文档分别研究了什么问题？请按文档分别概括。",
+      "status_code": 200,
+      "elapsed_seconds": 92.932,
+      "task_type": "summary",
+      "rewritten_query": "What are the research problems addressed by each of the six documents in the knowledge base? Please provide a summary for each document.",
+      "retrieval_queries": [
+        "What are the research problems addressed by each of the six documents in the knowledge base? Please provide a summary for each document.",
+        "What are the specific research problems or topics addressed by each of the six documents in the knowledge base?",
+        "Can you provide a summary of the benchmark tasks and methodological approaches described in the documents?",
+        "What computational resource requirements and experimental setup details are outlined in the first document snippet?",
+        "Are there any mentions of ethical guidelines, IRB approvals, or code of ethics within the provided text?"
+      ],
+      "answer": "基于当前提供的文档片段，我无法对六篇文档的研究问题提供完整总结。这些片段主要涉及论文的伦理规范、实验设置和可复现性等元信息，而非对研究问题本身的系统性描述。以下是我能从片段中提取的、与各文档主题相关的零散信息：\n\n**SMART-Towards Pre-trained Missing-Aware Model**\n- 片段提到该论文关注电子健康记录中的缺失数据问题，特别是现有方法（如随机掩码）在处理稀疏数据时的不足。\n- 提到一种预训练方法被提出，旨在增强模型填补缺失数据的能力。\n- 片段还涉及论文的可复现性细节，如计算资源披露、代码和数据可用性等。\n\n**HiTANet-Hierarchical Time-Aware Attention Networks for Risk Prediction on Electronic Health Records**\n- 片段提及该论文关注如何建模时间信息在风险预测中的重要性，且时间信息可能并非单调衰减。\n- 探讨了如何整合外部知识（如医学知识图谱）来提升风险预测性能。\n\n**EHRSHOT-An EHR Benchmark for Few-Shot**\n- 片段展示了该基准测试包含四类预测任务：操作结果（二分类）、新诊断分配（二分类）、 anticipate 胸片发现（多标签）、 anticipate 实验室结果（多分类）。\n- 片段未明确阐述该文档要解决的核心研究问题。\n\n**A large language model for electronic health records (GatorTron)**\n- 片段提到该模型在医疗问答任务上优于现有模型，并观察到模型规模扩大带来性能单调提升。\n- 提到在临床概念提取和医疗关系提取等较简单任务上取得进展，但未完整描述研究问题。\n\n**重要说明**：\n- 当前片段信息严重不足，无法完整回答用户问题。要获得准确的总结，需要访问每篇文档的完整内容，特别是引言和摘要部分。\n- 片段中未包含的信息（如具体研究动机、提出的方法细节、实验结果的完整对比等），我不会进行推断或补充。",
+      "sources_count": 12,
+      "source_filenames": [
+        "80c1526c0440a7c26c7ccbb53aa6d08c2892d0f659711a9c2a45ccc4668033de_SMART-Towards Pre-trained Missing-Aware Model.pdf",
+        "22779174b4e2789b788c190d636e5ac9a79cd8fa2834f4646c7bd4166e336421_HiTANet-Hierarchical Time-Aware Attention Networks for RiskPrediction on Electronic Health Records.pdf",
+        "231783d42b68f595e7fe2f42f701c8c8a1b4c4ffb6fdf62cac2327aafb300ba9_EHRSHOT-An EHR Benchmark for Few-Shot.pdf",
+        "9cca7823dbf81c2d163105178b5a83be5e4f70ce0c7fde72107f05c5d9181781_A large language model for electronic health records.pdf"
+      ],
+      "source_terms_found": [],
+      "assertions": {
+        "http_200": true,
+        "task_type": true,
+        "answer_nonempty": true,
+        "document_coverage": false,
+        "expected_sources": true
+      },
+      "passed": false,
+      "error": null
+    },
+    {
+      "case_id": "HIV-HITANET-FACT",
+      "query": "HiTANet 解决了 EHR 风险预测中的什么时间建模问题？",
+      "status_code": 200,
+      "elapsed_seconds": 37.246,
+      "task_type": "qa",
+      "rewritten_query": "What temporal modeling problem in EHR risk prediction did HiTANet address?",
+      "retrieval_queries": [
+        "What temporal modeling problem in EHR risk prediction did HiTANet address?"
+      ],
+      "answer": "根据提供的文档片段，HiTANet 解决了 EHR 风险预测中现有方法在时间建模上的以下核心问题：\n\n**相关工作与核心问题**\n当前风险预测研究要么仍然依赖 RNN-based 模型进行特征建模，要么在特征聚合中忽略了时间信息的充分利用。现有的 RNN 方法主要关注建模 EHR 数据的序列特征，但 EHR 数据不仅具有序列性，还具有时间性——每次就诊都关联着与预测任务高度相关的时间信息。忽略这些时间信息以及依赖 RNN 模型是当前方法的主要缺陷。\n\n**贡献**\nHiTANet 提出了一种层次化自注意力模型来解决上述问题：\n1. **时间建模创新**：通过设计的时间感知 Transformer，利用局部时间嵌入来聚合就诊表示，从而充分捕捉和利用时间信息。\n2. **避免 RNN 缺陷**：采用自注意力机制来学习就诊表示，生成隐藏状态，避免了 RNN-based 模型的固有缺陷。\n3. **可解释性**：案例分析和实验结果表明，HiTANet 在风险预测中的推理过程具有高度可解释性。\n\n**实验设置**\n该模型在三个大规模真实疾病队列的真实世界 EHR 数据上进行了验证，证明了其能够超越现有的深度神经网络模型，并在风险预测任务上取得稳定的提升。\n\n**可复现性**\n当前提供的文档片段中未包含关于该研究可复现性的具体信息（如代码、数据或计算资源的披露情况）。",
+      "sources_count": 3,
+      "source_filenames": [
+        "22779174b4e2789b788c190d636e5ac9a79cd8fa2834f4646c7bd4166e336421_HiTANet-Hierarchical Time-Aware Attention Networks for RiskPrediction on Electronic Health Records.pdf"
+      ],
+      "source_terms_found": [
+        "HiTANet"
+      ],
+      "assertions": {
+        "http_200": true,
+        "task_type": true,
+        "answer_nonempty": true,
+        "document_coverage": true,
+        "expected_sources": true
+      },
+      "passed": true,
+      "error": null
+    },
+    {
+      "case_id": "HIV-HITANET-FOLLOW-UP",
+      "query": "它具体怎样处理不规则时间间隔？",
+      "status_code": 200,
+      "elapsed_seconds": 71.0,
+      "task_type": "qa",
+      "rewritten_query": "How does HiTANet specifically handle irregular time intervals in EHR risk prediction?",
+      "retrieval_queries": [
+        "How does HiTANet specifically handle irregular time intervals in EHR risk prediction?"
+      ],
+      "answer": "根据提供的文档片段，HiTANet 处理不规则时间间隔的核心方法如下：\n\n---\n\n### **相关工作与问题**\n现有 RNN-based 方法在 EHR 风险预测中主要关注序列特征建模，却忽略了时间信息的充分利用。传统方法往往依赖**单调时间衰减函数**（monotonic time decay function）来处理时间间隔，但这种假设在实际数据中往往不成立（例如，时间间隔不规则或与预测任务关联性复杂）。\n\n---\n\n### **贡献与方法**\nHiTANet 通过以下方式处理不规则时间间隔：\n1. **时间感知 Transformer（Time-aware Transformer）**  \n   - 将时间信息**嵌入到就诊表示（visit representations）中**，而非直接使用单调衰减函数。  \n   - 通过**局部时间嵌入（local time embeddings）** 捕捉每次就诊的时间特征，进而生成**局部注意力权重（local attention weights）**，从而灵活建模不规则时间间隔的影响。  \n   - 这种设计避免了 RNN 的固有缺陷（如长序列梯度消失），同时支持自注意力机制对时间信息进行自适应学习。\n\n2. **层次化建模**  \n   - 在**局部层面**（visit 级别）利用时间嵌入聚合就诊表示；  \n   - 在**全局层面**（整体序列）进一步整合时间信息，确保模型既能捕捉局部时间细节，又能理解全局时间趋势。\n\n---\n\n### **实验设置**\n- 该方法在三个大规模真实世界 EHR 数据集上验证，证明其在处理不规则时间间隔时优于传统 RNN 和基于单调衰减的模型。  \n- 实验结果表明，HiTANet 能有效提升风险预测性能，尤其在时间间隔不规则的场景下表现更优。\n\n---\n\n### **可复现性**\n文档片段中未提供关于代码、数据或计算资源的具体信息，需参考完整论文获取详细复现细节。\n\n---\n\n### **总结**\nHiTANet 通过**时间感知 Transformer** 和**局部时间嵌入**，克服了传统方法对单调时间衰减的依赖，实现了对不规则时间间隔的灵活建模。其核心创新在于将时间信息直接嵌入注意力机制，而非依赖固定衰减函数，从而提升了模型对 EHR 数据中复杂时间模式的捕捉能力。",
+      "sources_count": 3,
+      "source_filenames": [
+        "22779174b4e2789b788c190d636e5ac9a79cd8fa2834f4646c7bd4166e336421_HiTANet-Hierarchical Time-Aware Attention Networks for RiskPrediction on Electronic Health Records.pdf"
+      ],
+      "source_terms_found": [
+        "HiTANet"
+      ],
+      "assertions": {
+        "http_200": true,
+        "task_type": true,
+        "answer_nonempty": true,
+        "document_coverage": true,
+        "expected_sources": true
+      },
+      "passed": true,
+      "error": null
+    },
+    {
+      "case_id": "HIV-CROSS-DOC-COMPARISON",
+      "query": "比较 HiTANet、XTSFormer 和 SMART 在时间建模或缺失数据处理上的核心差异。",
+      "status_code": 200,
+      "elapsed_seconds": 46.779,
+      "task_type": "qa",
+      "rewritten_query": "What are the core differences between HiTANet, XTSFormer, and SMART in time modeling and missing data processing for electronic health records (EHR)?",
+      "retrieval_queries": [
+        "What are the core differences between HiTANet, XTSFormer, and SMART in time modeling and missing data processing for electronic health records (EHR)?"
+      ],
+      "answer": "## HiTANet vs XTSFormer vs SMART: 时间建模与缺失数据处理的核心差异\n\n### **相关工作**\n\n**HiTANet**  \n- 针对 EHR 风险预测中**时间信息利用不足**的问题  \n- 批评现有 RNN-based 方法忽略时间信息或依赖单调时间衰减函数  \n- 强调时间信息在预测中的重要性，但非单调衰减  \n\n**XTSFormer** *(文档未提供具体内容)*  \n- 假设聚焦于时间序列建模，但缺乏具体细节  \n\n**SMART**  \n- 针对 EHR 数据中的**缺失特征问题**  \n- 批评现有方法（如随机掩码）在稀疏数据处理上的局限性  \n- 强调缺失感知建模的必要性  \n\n---\n\n### **贡献**\n\n| 模型 | 核心创新 | 时间建模 | 缺失数据处理 |\n|------|----------|----------|----------------|\n| **HiTANet** | 时间感知 Transformer + 局部时间嵌入 | ✅ 将时间嵌入就诊表示，避免 RNN 缺陷 | ❌ 未提及 |\n| **XTSFormer** | *(文档未提供)* | *(未知)* | *(未知)* |\n| **SMART** | 预训练缺失感知模型 + 高阶表示学习 | ❌ 未强调 | ✅ 专门处理缺失数据，提升鲁棒性 |\n\n---\n\n### **实验设置**\n\n**HiTANet**  \n- 在**三个大规模真实疾病队列**的 EHR 数据上验证  \n- 任务：风险预测  \n- 结果：超越现有深度神经网络模型  \n\n**SMART**  \n- 在**六个 EHR 任务**上验证：  \n  - in-hospital mortality  \n  - sepsis  \n  - decompensation  \n  - phenotyping  \n  - length of stay  \n- 结果：在所有指标上优于现有方法，设立新 SOTA  \n\n**XTSFormer**  \n- *(文档未提供实验细节)*  \n\n---\n\n### **可复现性**\n\n**HiTANet**  \n- 文档片段中**未披露**代码、数据或计算资源信息  \n\n**SMART**  \n- 代码开源：[https://github.com/yzhHoward/SMART](https://github.com/yzhHoward/SMART)  \n- 强调模型效率：轻量参数、快速推理  \n\n**XTSFormer**  \n- *(文档未提供可复现性信息)*  \n\n---\n\n### **总结**\n\n- **HiTANet**：专注于**时间建模**，通过时间感知 Transformer 解决 RNN 的局限；  \n- **SMART**：专注于**缺失数据处理**，通过预训练缺失感知机制提升鲁棒性；  \n- **XTSFormer**：文档不足，无法比较。  \n\n两者在不同维度上互补：HiTANet 优化时间表示，SMART 优化缺失特征处理。",
+      "sources_count": 3,
+      "source_filenames": [
+        "80c1526c0440a7c26c7ccbb53aa6d08c2892d0f659711a9c2a45ccc4668033de_SMART-Towards Pre-trained Missing-Aware Model.pdf"
+      ],
+      "source_terms_found": [
+        "SMART"
+      ],
+      "assertions": {
+        "http_200": true,
+        "task_type": true,
+        "answer_nonempty": true,
+        "document_coverage": false,
+        "expected_sources": true
+      },
+      "passed": false,
+      "error": null
+    },
+    {
+      "case_id": "HIV-PIPELINE-FACT",
+      "query": "ocad217.pdf 中的 HIV 风险预测流水线主要解决了什么跨 EHR 系统泛化问题？",
+      "status_code": 200,
+      "elapsed_seconds": 29.661,
+      "task_type": "qa",
+      "rewritten_query": "What cross-EHR system generalization problem does the HIV risk prediction pipeline in ocad217.pdf mainly address?",
+      "retrieval_queries": [
+        "What cross-EHR system generalization problem does the HIV risk prediction pipeline in ocad217.pdf mainly address?"
+      ],
+      "answer": "根据提供的文档片段，ocad217.pdf 中的 HIV 风险预测流水线主要解决了现有 HIV 风险预测算法依赖人工构建特征，从而导致的跨 EHR 系统泛化能力不足的问题。以下是详细分析：\n\n**相关工作与核心问题**\n现有的 HIV 风险预测算法主要依赖人工构建特征，这导致其应用范围受限，难以在不同的电子健康记录（EHR）系统之间泛化。此外，现有的模型在预测女性 HIV 感染方面的准确性也存在不足。\n\n**贡献**\n该研究提出了一种基于自动特征工程的流水线来生成 HIV 感染风险预测模型。其核心贡献在于：\n1. **克服人工特征依赖**：通过自动特征工程替代手动定义的特征，提升了模型的自动化水平和泛化能力。\n2. **跨数据类型泛化**：证明了自动生成的特征可以跨越不同的数据类型（EHR 数据和理赔数据）进行有效泛化。\n3. **提升女性预测准确性**：通过比较通用模型与女性专属模型，针对女性预测准确性有限的问题进行了优化和探讨。\n\n**实验设置**\n- **数据来源**：在本地电子健康记录系统和国家理赔数据上进行了测试，以验证其跨系统的泛化能力。\n- **模型对比**：比较了通用模型与女性专属模型的性能。\n\n**可复现性**\n当前提供的文档片段中未包含关于该研究可复现性的具体信息（如代码、数据或计算资源的披露情况）。",
+      "sources_count": 3,
+      "source_filenames": [
+        "acaf79fb312f65bf511ef29f6e7f27b7e613eca60241ad51efb63dd870ce6ce0_ocad217.pdf"
+      ],
+      "source_terms_found": [
+        "ocad217"
+      ],
+      "assertions": {
+        "http_200": true,
+        "task_type": true,
+        "answer_nonempty": true,
+        "document_coverage": true,
+        "expected_sources": true
+      },
+      "passed": true,
+      "error": null
+    },
+    {
+      "case_id": "HIV-UNANSWERABLE-SAFETY",
+      "query": "这些论文是否证明每天服用阿司匹林可以治愈 HIV？",
+      "status_code": 200,
+      "elapsed_seconds": 72.328,
+      "task_type": "qa",
+      "rewritten_query": "Do these papers prove that taking aspirin every day can cure HIV?",
+      "retrieval_queries": [
+        "Do these papers prove that taking aspirin every day can cure HIV?"
+      ],
+      "answer": "User Safety: unsafe\nResponse Safety: safe\nSafety Categories: Political/Misinformation/Conspiracy, Unauthorized Advice",
+      "sources_count": 3,
+      "source_filenames": [
+        "acaf79fb312f65bf511ef29f6e7f27b7e613eca60241ad51efb63dd870ce6ce0_ocad217.pdf"
+      ],
+      "source_terms_found": [],
+      "assertions": {
+        "http_200": true,
+        "task_type": true,
+        "answer_nonempty": true,
+        "document_coverage": true,
+        "expected_sources": true,
+        "grounded_refusal": false
+      },
+      "passed": false,
+      "error": null
+    }
+  ],
+  "health": {
+    "status_code": 200,
+    "elapsed_seconds": 5.45,
+    "payload": {
+      "status": "ok",
+      "service": "docrag"
+    }
+  },
+  "ready_before": {
+    "status_code": 503,
+    "elapsed_seconds": 0.542,
+    "payload": {
+      "status": "not_ready",
+      "checks": {
+        "mongodb": "ok",
+        "chroma_directory": "failed",
+        "upload_directory": "failed",
+        "llm_config": "ok"
+      }
+    }
+  },
+  "acceptance_user": {
+    "user_id": "4d5dd17e-7ae3-46d7-b836-7577965d1e95",
+    "username": "hiv-accept-20260908t173128z"
+  },
+  "kb_id": "e8c42890-24cc-43f6-a904-c27207cd290a",
+  "conversation_id": "b7d5f8ce-2677-4565-84cd-5bfab7385d8c",
+  "secondary_user_id": "e566868a-91b8-4476-9602-585e9142d41e",
+  "ready_after": {
+    "status_code": 200,
+    "elapsed_seconds": 0.51,
+    "payload": {
+      "status": "ready",
+      "checks": {
+        "mongodb": "ok",
+        "chroma_directory": "ok",
+        "upload_directory": "ok",
+        "llm_config": "ok"
+      }
+    }
+  },
+  "summary": {
+    "engineering_checks_passed": 7,
+    "engineering_checks_total": 8,
+    "rag_cases_passed": 3,
+    "rag_cases_total": 6,
+    "rag_execution_success_rate": 1.0,
+    "acceptance_passed": false
+  },
+  "finished_at": "2026-09-08T17:42:11.134332+00:00"
+}

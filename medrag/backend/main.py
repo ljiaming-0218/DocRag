@@ -11,7 +11,7 @@ from api_errors import (
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 
-from services.health_service import check_readiness
+from services.health_service import check_readiness, ensure_runtime_directories
 from stores.user_store import create_user_indexes
 from stores.database import close_database, connect_database
 from stores.message_store import create_message_indexes
@@ -30,6 +30,7 @@ from routers.auth_router import router as auth_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        ensure_runtime_directories()
         await connect_database()
         await create_conversation_indexes()
         await create_message_indexes()

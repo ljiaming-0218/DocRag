@@ -14,6 +14,11 @@ from stores.database import ping_database
 logger = logging.getLogger("uvicorn.error")
 
 
+def ensure_runtime_directories() -> None:
+    for path in (CHROMA_DIR, UPLOAD_DIR):
+        path.mkdir(parents=True, exist_ok=True)
+
+
 def is_directory_ready(path: Path) -> bool:
     return path.exists() and path.is_dir()
 

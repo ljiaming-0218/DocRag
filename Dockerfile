@@ -16,6 +16,11 @@ RUN useradd -m -u 1000 user
 
 WORKDIR /home/user/app
 
+RUN mkdir -p \
+        /home/user/app/runtime/chroma_db \
+        /home/user/app/runtime/uploads \
+    && chown -R user:user /home/user/app
+
 COPY medrag/backend/requirements.txt /tmp/requirements.txt
 
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
@@ -26,6 +31,8 @@ RUN python -c "from sentence_transformers import SentenceTransformer, CrossEncod
 
 ENV HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
+    CHROMA_DIR=/home/user/app/runtime/chroma_db \
+    UPLOAD_DIR=/home/user/app/runtime/uploads \
     OCR_ENABLED=true \
     OCR_LANGUAGES=eng+chi_sim \
     OCR_DPI=300 \

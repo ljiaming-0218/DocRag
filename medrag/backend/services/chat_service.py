@@ -31,6 +31,21 @@ from stores.conversation_store import find_conversation_by_id
 
 
 NO_SOURCE_ANSWER = "当前文献未提供相关信息。"
+SAFETY_CLASSIFIER_MARKERS = (
+    "user safety:",
+    "response safety:",
+)
+
+
+def normalize_generated_answer(answer: str) -> str:
+    normalized_answer = answer.strip()
+    lowered_answer = normalized_answer.lower()
+    if all(
+        marker in lowered_answer
+        for marker in SAFETY_CLASSIFIER_MARKERS
+    ):
+        return NO_SOURCE_ANSWER
+    return normalized_answer
 
 
 def _enrich_source_filenames(
@@ -314,6 +329,8 @@ async def ask_conversation(
                 context["prompt"],
                 operation="answer",
             )
+
+        answer = normalize_generated_answer(answer)
 
         assistant_message = await create_message(
             conversation_id,

@@ -1,0 +1,15 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "modes": [
+    "dense",
+    "dense_rerank",
+    "hybrid_rerank"
+  ],
+  "candidate_k": 20,
+  "top_k": 5,
+  "chunk_size": 500,
+  "chunk_overlap": 50,
+  "chunk_strategy": "recursive",
+  "query_variant": "original",
+  "llm_called": false
+}

@@ -249,6 +249,52 @@ async def test_no_evidence_rejects_without_calling_llm(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_safety_classifier_output_becomes_grounded_refusal(monkeypatch):
+    context = make_ask_context()
+    create_message = AsyncMock(return_value={
+        "message_id": "assistant-message-1",
+    })
+
+    monkeypatch.setattr(
+        chat_service,
+        "route_task",
+        Mock(return_value="qa"),
+    )
+    monkeypatch.setattr(
+        chat_service,
+        "prepare_ask_context",
+        AsyncMock(return_value=context),
+    )
+    monkeypatch.setattr(
+        chat_service,
+        "generate_answer",
+        Mock(return_value=(
+            "User Safety: unsafe\n"
+            "Response Safety: safe\n"
+            "Safety Categories: medical advice"
+        )),
+    )
+    monkeypatch.setattr(chat_service, "create_message", create_message)
+    monkeypatch.setattr(
+        chat_service,
+        "set_message_status",
+        AsyncMock(),
+    )
+
+    result = await chat_service.ask_conversation(
+        "user-1",
+        "conversation-1",
+        "Can aspirin cure HIV?",
+    )
+
+    assert result["answer"] == chat_service.NO_SOURCE_ANSWER
+    assert (
+        create_message.await_args.args[2]
+        == chat_service.NO_SOURCE_ANSWER
+    )
+
+
+@pytest.mark.asyncio
 async def test_llm_failure_marks_user_message_failed(monkeypatch):
     context = make_ask_context()
     set_status = AsyncMock()

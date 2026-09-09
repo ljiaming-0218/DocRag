@@ -5,6 +5,22 @@ import pytest
 from services import health_service
 
 
+def test_ensure_runtime_directories_creates_missing_directories(
+    monkeypatch,
+    tmp_path,
+):
+    chroma_dir = tmp_path / "runtime" / "chroma"
+    upload_dir = tmp_path / "runtime" / "uploads"
+
+    monkeypatch.setattr(health_service, "CHROMA_DIR", chroma_dir)
+    monkeypatch.setattr(health_service, "UPLOAD_DIR", upload_dir)
+
+    health_service.ensure_runtime_directories()
+
+    assert chroma_dir.is_dir()
+    assert upload_dir.is_dir()
+
+
 @pytest.mark.asyncio
 async def test_readiness_returns_ready(monkeypatch, tmp_path):
     chroma_dir = tmp_path / "chroma"
