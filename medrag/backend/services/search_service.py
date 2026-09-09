@@ -375,6 +375,7 @@ def search_summary_chunks_for_documents(
     per_query_keep: int = 4,
     context_k: int = 12,
     index_generations: dict[str, str | None] | None = None,
+    original_query: str | None = None,
 ) -> dict:
     if seed_k <= 0:
         raise ValueError("seed_k must be greater than 0")
@@ -385,7 +386,10 @@ def search_summary_chunks_for_documents(
     if context_k <= 0:
         raise ValueError("context_k must be greater than 0")
 
-    if is_knowledge_base_overview_query(query):
+    if (
+        is_knowledge_base_overview_query(original_query or "")
+        or is_knowledge_base_overview_query(query)
+    ):
         return search_knowledge_base_overview_chunks(
             user_id,
             document_ids,

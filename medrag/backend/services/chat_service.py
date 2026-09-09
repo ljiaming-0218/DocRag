@@ -178,6 +178,7 @@ async def prepare_ask_context(
                 document_ids,
                 rewritten_query,
                 index_generations=index_generations,
+                original_query=query,
             )
             sources = summary_result["sources"]
             retrieval_queries = summary_result["retrieval_queries"]
