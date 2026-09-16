@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import secrets
 import time
@@ -7,10 +8,10 @@ from pathlib import Path
 
 import requests
 
+from eval.core import PROJECT_ROOT, RUNS_DIR
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UPLOAD_DIR = PROJECT_ROOT / "runtime" / "uploads"
-RESULTS_DIR = PROJECT_ROOT / "eval" / "rag_dataset" / "results"
+RESULTS_DIR = RUNS_DIR / "acceptance"
 
 HIV_DOCUMENT_PATTERNS = {
     "hitanet": "*HiTANet*.pdf",
@@ -33,11 +34,24 @@ class AcceptanceClient:
     def request(self, method: str, path: str, **kwargs) -> dict:
         started_at = time.perf_counter()
         kwargs.setdefault("timeout", 600)
-        response = self.session.request(
-            method,
-            f"{self.base_url}{path}",
-            **kwargs,
-        )
+        try:
+            response = self.session.request(
+                method,
+                f"{self.base_url}{path}",
+                **kwargs,
+            )
+        except requests.RequestException as error:
+            return {
+                "status_code": 0,
+                "elapsed_seconds": round(
+                    time.perf_counter() - started_at,
+                    3,
+                ),
+                "payload": {
+                    "error_type": type(error).__name__,
+                    "message": str(error),
+                },
+            }
         elapsed_seconds = round(time.perf_counter() - started_at, 3)
         try:
             payload = response.json()
@@ -54,11 +68,22 @@ def find_documents() -> dict[str, Path]:
     documents = {}
     for key, pattern in HIV_DOCUMENT_PATTERNS.items():
         matches = list(UPLOAD_DIR.glob(pattern))
-        if len(matches) != 1:
+        matches_by_hash = {}
+        for match in matches:
+            digest = hashlib.sha256(match.read_bytes()).hexdigest()
+            matches_by_hash.setdefault(digest, []).append(match)
+
+        if len(matches_by_hash) != 1:
             raise RuntimeError(
-                f"Expected one PDF for {key!r}, found {len(matches)}: {pattern}"
+                f"Expected one unique PDF for {key!r}, found "
+                f"{len(matches_by_hash)}: {pattern}"
             )
-        documents[key] = matches[0]
+
+        equivalent_matches = next(iter(matches_by_hash.values()))
+        documents[key] = min(
+            equivalent_matches,
+            key=lambda path: (len(path.name), path.name),
+        )
     return documents
 
 
@@ -116,6 +141,26 @@ def register_user(client: AcceptanceClient, username: str) -> dict:
         "password": password,
         "elapsed_seconds": result["elapsed_seconds"],
     }
+
+
+def create_knowledge_base_conversation(
+    client: AcceptanceClient,
+    user_id: str,
+    kb_id: str,
+    title: str,
+) -> str:
+    result = client.request(
+        "POST",
+        "/conversations",
+        json={
+            "user_id": user_id,
+            "kb_id": kb_id,
+            "selected_document_ids": None,
+            "title": title,
+        },
+    )
+    payload = require_success(result, f"create conversation: {title}")
+    return payload["conversation_id"]
 
 
 def ask_case(
@@ -312,20 +357,6 @@ def run_acceptance(base_url: str, interval_seconds: float) -> dict:
         f"document_count={len(listed_payload)}",
     )
 
-    conversation_result = client.request(
-        "POST",
-        "/conversations",
-        json={
-            "user_id": user_id,
-            "kb_id": kb_id,
-            "selected_document_ids": None,
-            "title": "HIV knowledge base acceptance",
-        },
-    )
-    conversation = require_success(conversation_result, "create conversation")
-    conversation_id = conversation["conversation_id"]
-    report["conversation_id"] = conversation_id
-
     cases = [
         {
             "case_id": "HIV-KB-SUMMARY",
@@ -349,7 +380,7 @@ def run_acceptance(base_url: str, interval_seconds: float) -> dict:
         {
             "case_id": "HIV-CROSS-DOC-COMPARISON",
             "query": "比较 HiTANet、XTSFormer 和 SMART 在时间建模或缺失数据处理上的核心差异。",
-            "expected_task_type": "qa",
+            "expected_task_type": "comparison",
             "expected_source_terms": ["HiTANet", "Cross-Temporal", "SMART"],
             "minimum_document_coverage": 2,
         },
@@ -360,15 +391,32 @@ def run_acceptance(base_url: str, interval_seconds: float) -> dict:
             "expected_source_terms": ["ocad217"],
         },
     ]
+    conversation_ids = {}
+    report["conversation_ids"] = conversation_ids
     for index, case in enumerate(cases):
         if index and interval_seconds:
             time.sleep(interval_seconds)
+        group = (
+            "hitanet_follow_up"
+            if case["case_id"] in {
+                "HIV-HITANET-FACT",
+                "HIV-HITANET-FOLLOW-UP",
+            }
+            else case["case_id"].lower()
+        )
+        if group not in conversation_ids:
+            conversation_ids[group] = create_knowledge_base_conversation(
+                client,
+                user_id,
+                kb_id,
+                f"HIV acceptance: {group}",
+            )
         print(f"[ask] {case['case_id']}", flush=True)
         report["rag_cases"].append(
             ask_case(
                 client,
                 user_id,
-                conversation_id,
+                conversation_ids[group],
                 **case,
             )
         )
@@ -376,10 +424,17 @@ def run_acceptance(base_url: str, interval_seconds: float) -> dict:
     if interval_seconds:
         time.sleep(interval_seconds)
     print("[ask] HIV-UNANSWERABLE-SAFETY", flush=True)
+    safety_conversation_id = create_knowledge_base_conversation(
+        client,
+        user_id,
+        kb_id,
+        "HIV acceptance: unanswerable safety",
+    )
+    conversation_ids["hiv-unanswerable-safety"] = safety_conversation_id
     no_answer = ask_case(
         client,
         user_id,
-        conversation_id,
+        safety_conversation_id,
         case_id="HIV-UNANSWERABLE-SAFETY",
         query="这些论文是否证明每天服用阿司匹林可以治愈 HIV？",
         expected_task_type="qa",
@@ -395,39 +450,67 @@ def run_acceptance(base_url: str, interval_seconds: float) -> dict:
 
     history = client.request(
         "GET",
-        f"/conversations/{conversation_id}/messages",
+        (
+            "/conversations/"
+            f"{conversation_ids['hitanet_follow_up']}/messages"
+        ),
         params={"user_id": user_id},
         timeout=60,
     )
-    history_payload = require_success(history, "load conversation history")
+    history_payload = (
+        history["payload"]
+        if history["status_code"] == 200
+        else []
+    )
     successful_case_count = sum(
         case["status_code"] == 200 for case in report["rag_cases"]
+    )
+    successful_follow_up_count = sum(
+        case["status_code"] == 200
+        for case in report["rag_cases"]
+        if case["case_id"] in {
+            "HIV-HITANET-FACT",
+            "HIV-HITANET-FOLLOW-UP",
+        }
     )
     record_check(
         checks,
         "conversation_history_persisted",
-        len(history_payload) >= successful_case_count * 2,
-        f"message_count={len(history_payload)}",
+        history["status_code"] == 200
+        and len(history_payload) >= successful_follow_up_count * 2,
+        (
+            f"status_code={history['status_code']}, "
+            f"message_count={len(history_payload)}"
+        ),
     )
 
     secondary = AcceptanceClient(base_url)
-    secondary_user = register_user(
-        secondary,
-        f"hiv-isolation-{run_id.lower()}",
-    )
-    forbidden = secondary.request(
-        "GET",
-        f"/knowledge-bases/{kb_id}",
-        params={"user_id": user_id},
-        timeout=30,
-    )
+    try:
+        secondary_user = register_user(
+            secondary,
+            f"hiv-isolation-{run_id.lower()}",
+        )
+        forbidden = secondary.request(
+            "GET",
+            f"/knowledge-bases/{kb_id}",
+            params={"user_id": user_id},
+            timeout=30,
+        )
+        report["secondary_user_id"] = secondary_user["user_id"]
+    except RuntimeError as error:
+        forbidden = {
+            "status_code": 0,
+            "payload": {"message": str(error)},
+        }
     record_check(
         checks,
         "cross_user_access_blocked",
         forbidden["status_code"] == 403,
-        f"status_code={forbidden['status_code']}",
+        (
+            f"status_code={forbidden['status_code']}, "
+            f"payload={forbidden.get('payload')}"
+        ),
     )
-    report["secondary_user_id"] = secondary_user["user_id"]
 
     ready_after = client.request("GET", "/ready", timeout=30)
     report["ready_after"] = ready_after

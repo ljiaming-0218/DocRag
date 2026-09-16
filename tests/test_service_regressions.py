@@ -128,6 +128,42 @@ def test_query_rewrite_falls_back_on_llm_error(monkeypatch):
     assert result == "它有什么优势？"
 
 
+def test_query_rewrite_restores_missing_technical_entities(monkeypatch):
+    monkeypatch.setattr(
+        query_rewrite_service,
+        "detect_text_language",
+        lambda _query: "zh",
+    )
+    monkeypatch.setattr(
+        query_rewrite_service,
+        "generate_answer",
+        lambda *_args, **_kwargs: "请比较这些方法的实验表现。",
+    )
+
+    result = query_rewrite_service.rewrite_query(
+        history=[{
+            "role": "user",
+            "content": (
+                "比较 LoRA、full fine-tuning 在 WikiSQL、MultiNLI、"
+                "SAMSum 上使用 GPT-3 175B 的结果。"
+            ),
+        }],
+        query="它们的差异是什么？",
+        target_language="zh",
+    )
+
+    for entity in (
+        "LoRA",
+        "full fine-tuning",
+        "WikiSQL",
+        "MultiNLI",
+        "SAMSum",
+        "GPT-3",
+        "175B",
+    ):
+        assert entity in result
+
+
 @pytest.mark.asyncio
 async def test_assistant_message_keeps_sources(monkeypatch):
     sources = [{

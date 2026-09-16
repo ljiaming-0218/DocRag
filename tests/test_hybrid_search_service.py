@@ -283,7 +283,7 @@ def test_summary_merge_accepts_sparse_only_distance():
     ]
 
 
-def test_summary_filters_only_after_final_global_rerank(monkeypatch):
+def test_summary_filters_seed_evidence_before_coverage_merge(monkeypatch):
     candidate = make_candidate("summary evidence")
     candidate["rerank_score"] = -1.0
     rerank = Mock(side_effect=lambda _query, chunks, _top_k: chunks)
@@ -311,24 +311,71 @@ def test_summary_filters_only_after_final_global_rerank(monkeypatch):
         "summarize the paper",
     )
 
-    assert rerank.call_count == 2
+    assert rerank.call_count == 1
     evidence_filter.assert_called_once()
-    filtered_candidates = evidence_filter.call_args.args[0]
-    assert filtered_candidates[0]["matched_queries"] == [
-        "summarize the paper",
-    ]
     assert result["sources"] == []
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
-        "这个库里面的文档都讲了些什么？",
-        "What do the documents in the current literature cover?",
-    ],
-)
-def test_knowledge_base_overview_query_is_detected(query):
-    assert service.is_knowledge_base_overview_query(query) is True
+def test_summary_uses_original_query_when_rewrite_has_no_candidates(
+    monkeypatch,
+):
+    original_candidate = make_candidate("original-query evidence")
+
+    def retrieve(_user_id, _document_id, query, *_args):
+        if query == "原始总结问题":
+            return [original_candidate]
+        return []
+
+    monkeypatch.setattr(
+        service,
+        "retrieve_candidate_chunks",
+        Mock(side_effect=retrieve),
+    )
+    monkeypatch.setattr(
+        service,
+        "rerank_chunks",
+        Mock(side_effect=lambda _query, chunks, _top_k: chunks),
+    )
+    monkeypatch.setattr(
+        service,
+        "filter_relevant_evidence",
+        Mock(side_effect=lambda chunks: chunks),
+    )
+    monkeypatch.setattr(
+        service,
+        "build_summary_subqueries",
+        Mock(return_value=[]),
+    )
+
+    result = service.search_summary_chunks(
+        "user-1",
+        "document-1",
+        "rewritten summary query",
+        original_query="原始总结问题",
+    )
+
+    assert result["sources"] == [original_candidate]
+    assert result["retrieval_queries"] == [
+        "原始总结问题",
+        "rewritten summary query",
+    ]
+
+
+def test_summary_selection_preserves_subquery_coverage():
+    method = make_candidate("method", chunk_index=1)
+    method["rerank_score"] = 0.9
+    method["matched_queries"] = ["method query"]
+    result = make_candidate("result", chunk_index=2)
+    result["rerank_score"] = 0.1
+    result["matched_queries"] = ["result query"]
+
+    selected = service.select_query_covered_chunks(
+        [method, result],
+        ["method query", "result query"],
+        limit=2,
+    )
+
+    assert selected == [method, result]
 
 
 def test_knowledge_base_overview_preserves_document_coverage(monkeypatch):
@@ -376,6 +423,7 @@ def test_knowledge_base_overview_preserves_document_coverage(monkeypatch):
             document_id: f"generation-{document_id[-1]}"
             for document_id in document_ids
         },
+        overview=True,
     )
 
     returned_document_ids = [
@@ -405,4 +453,45 @@ def test_knowledge_base_overview_preserves_document_coverage(monkeypatch):
             for document_id in document_ids
         },
     )
+    summary_queries.assert_not_called()
+
+
+def test_knowledge_base_overview_uses_original_query_after_rewrite(
+    monkeypatch,
+):
+    chunks = [
+        make_candidate(
+            "Abstract: document-1 research objective",
+            document_id="document-1",
+            chunk_index=1,
+        ),
+        make_candidate(
+            "Abstract: document-2 research objective",
+            document_id="document-2",
+            chunk_index=1,
+        ),
+    ]
+    read_chunks = Mock(return_value=chunks)
+    summary_queries = Mock()
+    monkeypatch.setattr(service, "get_chunks_by_documents", read_chunks)
+    monkeypatch.setattr(
+        service,
+        "build_summary_subqueries",
+        summary_queries,
+    )
+
+    result = service.search_summary_chunks_for_documents(
+        "user-1",
+        ["document-1", "document-2"],
+        "Describe the research scope of the available material.",
+        context_k=2,
+        original_query="这个知识库中的文档分别研究了什么问题？",
+        overview=True,
+    )
+
+    assert len(result["sources"]) == 2
+    assert {
+        source["元数据"]["document_id"]
+        for source in result["sources"]
+    } == {"document-1", "document-2"}
     summary_queries.assert_not_called()

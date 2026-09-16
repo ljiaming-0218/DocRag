@@ -1,6 +1,6 @@
 import pytest
 
-from eval.calibrate_evidence_threshold import (
+from eval.tools.calibrate_threshold import (
     calibrate,
     evaluate_threshold,
     get_successful_cases,
@@ -15,24 +15,24 @@ def make_source(page: int, score: float) -> dict:
 
 
 def make_case(
-    question_id: str,
+    case_id: str,
     *,
     answerable: bool,
     gold_pages: list[int],
     sources: list[dict],
 ) -> tuple[dict, dict]:
-    question = {
-        "question_id": question_id,
-        "question_type": "fact" if answerable else "unanswerable",
-        "expected_answerable": answerable,
-        "source_pages": gold_pages,
+    case = {
+        "case_id": case_id,
+        "category": "fact" if answerable else "unanswerable",
+        "answerable": answerable,
+        "gold_pages": gold_pages,
     }
     result = {
-        "question_id": question_id,
+        "case_id": case_id,
         "status": "success",
         "actual": {"sources": sources},
     }
-    return question, result
+    return case, result
 
 
 def test_threshold_balances_gold_hit_and_unanswerable_rejection():
@@ -65,10 +65,10 @@ def test_threshold_balances_gold_hit_and_unanswerable_rejection():
 
 def test_evaluate_threshold_tracks_partial_gold_page_recall():
     cases = [{
-        "question_id": "Q-1",
-        "question_type": "summary",
-        "expected_answerable": True,
-        "gold_source_pages": [1, 2],
+        "case_id": "Q-1",
+        "category": "summary",
+        "answerable": True,
+        "gold_pages": [1, 2],
         "sources": [make_source(1, 0.9), make_source(2, 0.4)],
     }]
 
@@ -95,13 +95,13 @@ def test_missing_rerank_score_fails_fast():
 
 def test_error_cases_do_not_enter_calibration():
     question = {
-        "question_id": "Q-1",
-        "expected_answerable": True,
-        "source_pages": [1],
+        "case_id": "Q-1",
+        "answerable": True,
+        "gold_pages": [1],
     }
 
     cases = get_successful_cases(
-        {"results": [{"question_id": "Q-1", "status": "error"}]},
+        {"results": [{"case_id": "Q-1", "status": "error"}]},
         {"Q-1": question},
     )
 

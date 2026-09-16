@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
+from config import EMBEDDING_DIMENSION
 from services.chunk_validation_service import validate_chunk_params
 from services.conversation_service import list_conversations
 from services.document_service import (
@@ -18,7 +19,7 @@ from services.document_service import (
     set_document_language,
     set_document_processing_state,
 )
-from services.embedding_service import MODEL_NAME, embed_chunks
+from services.embedding_service import MODEL_NAME, PROVIDER_NAME, embed_chunks
 from services.language_service import detect_document_language
 from services.pdf_parser_service import extract_pdf_pages
 from services.pdf_storage_service import temporary_pdf, upload_pdf
@@ -76,15 +77,19 @@ def build_index_config(
     chunk_size: int,
     chunk_overlap: int,
 ) -> dict:
-    return {
+    index_config = {
         "chunk_strategy": chunk_strategy,
         "chunk_size": chunk_size,
         "chunk_overlap": chunk_overlap,
         "chunk_version": get_chunk_version(chunk_strategy),
+        "embedding_provider": PROVIDER_NAME,
         "embedding_model": MODEL_NAME,
         "embedding_version": EMBEDDING_VERSION,
         "index_version": INDEX_VERSION,
     }
+    if EMBEDDING_DIMENSION is not None:
+        index_config["embedding_dimension"] = EMBEDDING_DIMENSION
+    return index_config
 
 
 def build_index_fingerprint(index_config: dict) -> str:

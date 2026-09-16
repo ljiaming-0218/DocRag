@@ -1,4 +1,5 @@
 import logging
+from time import perf_counter
 
 from config import EVIDENCE_RERANK_MIN_SCORE
 
@@ -11,12 +12,18 @@ def filter_relevant_evidence(
     min_score: float | None = None,
 ) -> list[dict]:
     """Keep only evidence that passes the configured reranker threshold."""
+    started_at = perf_counter()
     threshold = (
         EVIDENCE_RERANK_MIN_SCORE
         if min_score is None
         else min_score
     )
     if threshold is None:
+        logger.info(
+            "evidence_filter_skipped candidates=%s evidence_filter_ms=%.2f",
+            len(chunks),
+            (perf_counter() - started_at) * 1000,
+        )
         return chunks
 
     filtered = [
@@ -26,9 +33,11 @@ def filter_relevant_evidence(
         and chunk["rerank_score"] >= threshold
     ]
     logger.info(
-        "evidence_filter_applied threshold=%s candidates=%s kept=%s",
+        "evidence_filter_applied threshold=%s candidates=%s kept=%s "
+        "evidence_filter_ms=%.2f",
         threshold,
         len(chunks),
         len(filtered),
+        (perf_counter() - started_at) * 1000,
     )
     return filtered

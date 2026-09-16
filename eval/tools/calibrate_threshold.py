@@ -1,47 +1,26 @@
 import argparse
-import json
 from pathlib import Path
 
+from eval.core import DATASET_DIR, RUNS_DIR, load_json, save_json
 
-BASE_DIR = Path(__file__).resolve().parent
-DATASET_DIR = BASE_DIR / "rag_dataset"
-DEFAULT_RESULTS_PATH = DATASET_DIR / "results" / "normal_results.json"
-DEFAULT_OUTPUT_PATH = (
-    DATASET_DIR / "results" / "evidence_threshold_calibration.json"
-)
-QUESTIONS_PATH = DATASET_DIR / "questions.json"
-
-
-def load_json(path: Path) -> dict | list:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def save_json(data: dict, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-def build_question_map(questions: list[dict]) -> dict[str, dict]:
+def build_case_map(cases: list[dict]) -> dict[str, dict]:
     return {
-        question["question_id"]: question
-        for question in questions
+        case["case_id"]: case
+        for case in cases
     }
 
 
 def get_successful_cases(
     result_data: dict,
-    questions_by_id: dict[str, dict],
+    cases_by_id: dict[str, dict],
 ) -> list[dict]:
     cases = []
     for result in result_data.get("results", []):
         if result.get("status") != "success":
             continue
 
-        question = questions_by_id.get(result.get("question_id"))
-        if question is None:
+        case = cases_by_id.get(result.get("case_id"))
+        if case is None:
             continue
 
         sources = (result.get("actual") or {}).get("sources", [])
@@ -52,17 +31,14 @@ def get_successful_cases(
         ]
         if missing_scores:
             raise ValueError(
-                f"{result['question_id']} 存在缺少 rerank_score 的 source"
+                f"{result['case_id']} 存在缺少 rerank_score 的 source"
             )
 
         cases.append({
-            "question_id": result["question_id"],
-            "question_type": question.get("question_type"),
-            "expected_answerable": question.get(
-                "expected_answerable",
-                bool(question.get("source_pages")),
-            ),
-            "gold_source_pages": question.get("source_pages") or [],
+            "case_id": result["case_id"],
+            "category": case.get("category"),
+            "answerable": case["answerable"],
+            "gold_pages": case.get("gold_pages") or [],
             "sources": sources,
         })
     return cases
@@ -120,8 +96,8 @@ def evaluate_threshold(
             if page is not None
         }
 
-        if case["expected_answerable"]:
-            gold_pages = set(case["gold_source_pages"])
+        if case["answerable"]:
+            gold_pages = set(case["gold_pages"])
             matched_pages = gold_pages & retained_pages
             if matched_pages:
                 true_positive += 1
@@ -185,22 +161,22 @@ def build_case_decisions(
             for page in (source_page(source) for source in retained)
             if page is not None
         ]
-        gold_pages = set(case["gold_source_pages"])
+        gold_pages = set(case["gold_pages"])
         matched_gold_pages = sorted(gold_pages & set(retained_pages))
-        expected_answerable = case["expected_answerable"]
+        answerable = case["answerable"]
 
         decisions.append({
-            "question_id": case["question_id"],
-            "question_type": case["question_type"],
-            "expected_answerable": expected_answerable,
+            "case_id": case["case_id"],
+            "category": case["category"],
+            "answerable": answerable,
             "system_would_answer": bool(retained),
             "decision_correct": (
                 bool(matched_gold_pages)
-                if expected_answerable
+                if answerable
                 else not retained
             ),
-            "gold_source_pages": case["gold_source_pages"],
-            "retained_source_pages": retained_pages,
+            "gold_pages": case["gold_pages"],
+            "source_pages": retained_pages,
             "matched_gold_pages": matched_gold_pages,
             "retained_scores": [
                 source["rerank_score"] for source in retained
@@ -225,7 +201,7 @@ def select_recommended_threshold(rows: list[dict]) -> dict | None:
 
 def calibrate(
     result_data: dict,
-    questions: list[dict],
+    dataset_cases: list[dict],
     top_k: int = 3,
 ) -> dict:
     if top_k <= 0:
@@ -233,7 +209,7 @@ def calibrate(
 
     cases = get_successful_cases(
         result_data,
-        build_question_map(questions),
+        build_case_map(dataset_cases),
     )
     thresholds = build_thresholds(cases)
     rows = [
@@ -241,10 +217,10 @@ def calibrate(
         for threshold in thresholds
     ]
     answerable_count = sum(
-        case["expected_answerable"] for case in cases
+        case["answerable"] for case in cases
     )
     unanswerable_count = sum(
-        not case["expected_answerable"] for case in cases
+        not case["answerable"] for case in cases
     )
     calibration_ready = answerable_count > 0 and unanswerable_count > 0
     recommended = (
@@ -286,17 +262,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--results",
         type=Path,
-        default=DEFAULT_RESULTS_PATH,
-    )
-    parser.add_argument(
-        "--questions",
-        type=Path,
-        default=QUESTIONS_PATH,
+        required=True,
+        help="generation runner 生成的 results.json",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=DEFAULT_OUTPUT_PATH,
+        default=RUNS_DIR / "calibration" / "evidence_threshold.json",
     )
     parser.add_argument("--top-k", type=int, default=3)
     return parser.parse_args()
@@ -304,9 +276,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    dataset_cases = []
+    for filename in ("single_turn.json", "follow_up.json"):
+        dataset_cases.extend(load_json(DATASET_DIR / filename)["cases"])
     report = calibrate(
         load_json(args.results),
-        load_json(args.questions),
+        dataset_cases,
         args.top_k,
     )
     report["source_results_file"] = str(args.results.resolve())

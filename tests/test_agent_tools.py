@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from services import chat_service
-from services.agent_router_service import route_task
+from services import agent_router_service, chat_service
+from services.agent_router_service import route_task_by_rules
 from services.prompt_service import (
     build_source_check_prompt,
     build_term_prompt,
@@ -22,15 +22,83 @@ from services.prompt_service import (
         ("LoRA 的核心机制是什么？", "qa"),
     ],
 )
-def test_route_task_selects_expected_tool(
+def test_rule_router_selects_expected_tool(
     query: str,
     expected_task: str,
 ):
-    assert route_task(query) == expected_task
+    assert route_task_by_rules(query)["task_type"] == expected_task
 
 
 def test_source_check_has_priority_over_summary():
-    assert route_task("总结这个结论的证据来源") == "source_check"
+    assert (
+        route_task_by_rules("总结这个结论的证据来源")["task_type"]
+        == "source_check"
+    )
+
+
+def test_llm_router_handles_natural_knowledge_base_summary(monkeypatch):
+    generate_answer = Mock(return_value=(
+        '{"task_type":"summary",'
+        '"scope":"knowledge_base_overview"}'
+    ))
+    monkeypatch.setattr(
+        agent_router_service,
+        "generate_answer",
+        generate_answer,
+    )
+
+    result = agent_router_service.route_task(
+        "库里面的论文分别讲了什么。"
+    )
+
+    assert result == {
+        "task_type": "summary",
+        "scope": "knowledge_base_overview",
+    }
+    generate_answer.assert_called_once()
+    assert generate_answer.call_args.kwargs["operation"] == "task_route"
+
+
+def test_llm_router_falls_back_to_rules_on_failure(monkeypatch):
+    monkeypatch.setattr(
+        agent_router_service,
+        "generate_answer",
+        Mock(side_effect=RuntimeError("provider unavailable")),
+    )
+
+    assert agent_router_service.route_task("总结这些论文") == {
+        "task_type": "summary",
+        "scope": "focused",
+    }
+
+
+def test_llm_router_rejects_unsupported_response(monkeypatch):
+    monkeypatch.setattr(
+        agent_router_service,
+        "generate_answer",
+        Mock(return_value="unknown_tool"),
+    )
+
+    assert agent_router_service.route_task("解释这个结论") == {
+        "task_type": "qa",
+        "scope": "focused",
+    }
+
+
+def test_rule_router_detects_knowledge_base_overview_scope():
+    assert route_task_by_rules("库里的论文都讲了些什么。") == {
+        "task_type": "summary",
+        "scope": "knowledge_base_overview",
+    }
+
+
+def test_rule_router_detects_english_knowledge_base_overview_scope():
+    assert route_task_by_rules(
+        "What do the documents in the current literature cover?"
+    ) == {
+        "task_type": "summary",
+        "scope": "knowledge_base_overview",
+    }
 
 
 @pytest.mark.parametrize(

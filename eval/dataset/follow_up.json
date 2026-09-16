@@ -1,0 +1,129 @@
+{
+  "scenario": "follow_up",
+  "cases": [
+    {
+      "case_id": "RAG-05",
+      "document_key": "rag",
+      "scenario": "follow_up",
+      "category": "comparison",
+      "query": "那另一个变体有什么不同？",
+      "history": [
+        {
+          "role": "user",
+          "content": "RAG-Sequence 如何使用检索到的文档？"
+        },
+        {
+          "role": "assistant",
+          "content": "RAG-Sequence 在生成完整序列时使用同一个检索文档。"
+        }
+      ],
+      "expected_rewritten_query": "RAG-Token 与 RAG-Sequence 相比，在生成序列时如何使用检索到的文档？",
+      "reference_answer": "另一个变体 RAG-Token 可以为每个目标 token 选择不同的检索文档，而 RAG-Sequence 对完整序列使用同一个文档。",
+      "answer_points": [
+        "正确补全另一个变体是 RAG-Token",
+        "说明 RAG-Token 可以按目标 token 使用不同文档",
+        "没有引入历史中不存在的主题"
+      ],
+      "gold_pages": [
+        3
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "RAG-05-E1",
+          "page": 3,
+          "text": "RAG-Token, can predict each target token based on a different document"
+        },
+        {
+          "evidence_id": "RAG-05-E2",
+          "page": 3,
+          "text": "RAG-Sequence, the model uses the same document to predict each target token"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "LORA-05",
+      "document_key": "lora",
+      "scenario": "follow_up",
+      "category": "comparison",
+      "query": "它在这些任务上和全量微调相比表现如何？",
+      "history": [
+        {
+          "role": "user",
+          "content": "论文在 GPT-3 175B 上评估了哪些任务？"
+        },
+        {
+          "role": "assistant",
+          "content": "作者评估了 WikiSQL、MultiNLI 和 SAMSum。"
+        }
+      ],
+      "expected_rewritten_query": "LoRA 在 WikiSQL、MultiNLI 和 SAMSum 上与 GPT-3 175B 全量微调相比表现如何？",
+      "reference_answer": "LoRA 在 WikiSQL、MultiNLI 和 SAMSum 三项任务上总体达到或超过全量微调结果，同时只训练远少于全量微调的参数。",
+      "answer_points": [
+        "正确补全这些任务是 WikiSQL、MultiNLI 和 SAMSum",
+        "LoRA 在三项任务上达到或超过全量微调",
+        "指出 LoRA 使用更少可训练参数"
+      ],
+      "gold_pages": [
+        8
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "LORA-05-E1",
+          "page": 8,
+          "text": "WikiSQL, validation accuracy on MultiNLI-matched, and Rouge-1/2/L on SAMSum"
+        },
+        {
+          "evidence_id": "LORA-05-E2",
+          "page": 8,
+          "text": "LoRA matches or exceeds the fine-tuning baseline on all three datasets"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "COT-05",
+      "document_key": "cot",
+      "scenario": "follow_up",
+      "category": "fact",
+      "query": "为什么小模型可能反而变差？",
+      "history": [
+        {
+          "role": "user",
+          "content": "CoT 在不同模型规模上的效果一致吗？"
+        },
+        {
+          "role": "assistant",
+          "content": "不一致，论文发现思维链带来的收益主要在足够大的模型上出现。"
+        }
+      ],
+      "expected_rewritten_query": "为什么 Chain-of-Thought Prompting 在较小语言模型上可能使性能低于标准提示？",
+      "reference_answer": "论文观察到，小模型生成的思维链虽然语言流畅，但推理逻辑可能不成立，因此会把模型引向错误答案，表现甚至低于标准提示；明显收益主要在约 100B 参数规模的模型上出现。",
+      "answer_points": [
+        "正确补全主题是小模型上的 CoT",
+        "小模型可能生成流畅但不合逻辑的推理链",
+        "错误推理链导致性能低于标准提示",
+        "收益主要在约 100B 参数规模出现"
+      ],
+      "gold_pages": [
+        4
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "COT-05-E1",
+          "page": 4,
+          "text": "models of smaller scale produced fluent but illogical chains of thought"
+        },
+        {
+          "evidence_id": "COT-05-E2",
+          "page": 4,
+          "text": "only yields performance gains when used with models of ∼100B parameters"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    }
+  ]
+}

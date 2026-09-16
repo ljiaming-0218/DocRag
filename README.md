@@ -50,11 +50,11 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 - 对疑似扫描页支持可选的 Tesseract 中英文 OCR 回退。
 - 记录文档主要语言，用于跨语言 Query Rewrite。
 - 持久化 `parsing/chunking/embedding/indexing` 处理阶段和失败原因，只有完整写入并校验后才将索引标记为完成。
-- Embedding 与 Chroma 写入支持配置化批处理，降低大文档处理时的单批内存和写入压力。
+- Embedding API 与 Chroma 写入支持配置化批处理，降低大文档处理时的请求次数和单批写入压力。
 
 ### 检索与生成
 
-- 使用 `BAAI/bge-small-zh-v1.5` 生成文本向量。
+- 通过 SiliconFlow 的 OpenAI-compatible API 调用 `BAAI/bge-m3` 生成中英文统一语义空间的文本向量。
 - 使用 Chroma 持久化向量，并通过 `user_id + document_id` 过滤检索范围。
 - 支持通过 `RETRIEVAL_MODE=dense|hybrid` 切换 Dense 基线与混合检索。
 - Hybrid 模式使用 BM25 补充模型名、缩写、数字等精确匹配候选，并通过 RRF 融合 Dense 与 Sparse 排名。
@@ -148,7 +148,7 @@ flowchart LR
 
 - [项目说明](medrag/docs/项目说明.md)
 - [系统架构图](medrag/docs/系统架构图.md)
-- [评估集说明](eval/rag_dataset/README.md)
+- [评估体系说明](eval/README.md)
 
 ## 技术栈
 
@@ -157,7 +157,7 @@ flowchart LR
 | 后端接口 | Python 3.11、FastAPI、Uvicorn |
 | PDF 解析 | PyMuPDF |
 | 扫描页 OCR | Tesseract OCR |
-| Embedding | Sentence Transformers、`BAAI/bge-small-zh-v1.5` |
+| Embedding | SiliconFlow Embedding API、`BAAI/bge-m3` |
 | Reranker | CrossEncoder、`BAAI/bge-reranker-base` |
 | 向量数据库 | Chroma |
 | 业务数据 | MongoDB、PyMongo Async API |
@@ -186,11 +186,11 @@ MedRag/
 │  │  └─ styles.css
 │  └─ docs/
 ├─ eval/
-│  ├─ rag_dataset/       # 评估文档、问题、gold evidence 与结果
-│  ├─ run_eval.py
-│  ├─ run_follow_up_eval.py
-│  ├─ calculate_metrics.py
-│  └─ debug_retrieval.py
+│  ├─ dataset/           # 固定文档、单轮和追问案例
+│  ├─ runners/           # 检索、生成和线上验收入口
+│  ├─ metrics/           # 确定性指标计算
+│  ├─ tools/             # 数据校验和 bad case 诊断
+│  └─ runs/              # 本地运行产物，不提交 Git
 ├─ tests/                # 业务层自动化回归测试
 ├─ runtime/              # 本地运行数据，不提交 Git
 ├─ Dockerfile
@@ -289,9 +289,19 @@ copy .env.example .env
 配置示例：
 
 ```env
-OPENROUTER_API_KEY=your_key
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=your_model
+REWRITE_LLM_PROVIDER=modelscope
+REWRITE_LLM_API_KEY=your_rewrite_key
+REWRITE_LLM_BASE_URL=https://api-inference.modelscope.cn/v1
+REWRITE_LLM_MODEL=your_rewrite_model
+REWRITE_LLM_TIMEOUT_SECONDS=20
+REWRITE_LLM_MAX_RETRIES=0
+
+ANSWER_LLM_PROVIDER=modelscope
+ANSWER_LLM_API_KEY=your_answer_key
+ANSWER_LLM_BASE_URL=https://api-inference.modelscope.cn/v1
+ANSWER_LLM_MODEL=your_answer_model
+ANSWER_LLM_TIMEOUT_SECONDS=120
+ANSWER_LLM_MAX_RETRIES=1
 JWT_SECRET_KEY=replace-with-a-long-random-secret
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=120
 RETRIEVAL_MODE=dense
@@ -311,6 +321,11 @@ MAX_UPLOAD_SIZE_MB=20
 ```
 
 API Key 只能放在后端环境变量中。`.env`、上传文件、Chroma 数据和日志均不得提交到 Git。
+
+LLM 层按职责使用两套 OpenAI-compatible 配置：`REWRITE_LLM_*` 负责
+Query Rewrite 和 Summary Query，`ANSWER_LLM_*` 负责最终回答、总结、报告、
+术语解释和来源核查。两套配置可以使用不同供应商，也可以暂时使用同一供应商。
+免费推理服务仍可能限流或临时不可用，不应将免费额度理解为可用性承诺。
 
 ### 4. 启动
 
@@ -391,9 +406,8 @@ D:\Anaconda\envs\medrag\python.exe -m pytest -q
 
 当前全量工程测试基线：
 
-```text
-255 passed
-```
+最近一次稳定回归基线以实际 `pytest -q` 输出为准；评估体系重构后需要重新
+运行回归再更新固定数字。
 
 测试包含业务单元测试、接口契约测试和前端 smoke test。大量外部依赖通过 Mock 隔离，因此不能替代 MongoDB、Chroma、真实模型和完整接口的集成测试。
 
@@ -403,22 +417,15 @@ D:\Anaconda\envs\medrag\python.exe -m pytest -q
 
 ```cmd
 cd /d D:\MedRag
-python eval\rag_dataset\validate_dataset.py
-python eval\run_eval.py
-python eval\run_follow_up_eval.py
-python eval\calculate_metrics.py
+python -m eval.tools.validate_dataset --require-gold-evidence
+python -m eval.runners.retrieval
+python -m eval.runners.generation --suite single_turn
+python -m eval.runners.generation --suite follow_up
 ```
 
-当前仓库保存的基线结果：
-
-| 指标 | 数值 |
-| --- | ---: |
-| Execution Success Rate | 0.8421 |
-| HitRate@3 | 0.7692 |
-| Recall@3 | 0.6026 |
-| MRR@3 | 0.6410 |
-
-本轮 16 道非追问题全部执行成功；3 道 follow-up 在连续评估后被免费模型供应商限流并返回 503，因此执行成功率下降不能直接归因于 Query Rewrite。检索 bad case 主要集中在 `LORA-03`、`COT-03`、`COT-TERM-01`，`LORA-01` 只覆盖部分 gold evidence。新增 `source_check` 两题的 HitRate@3 为 1.0、Recall@3 为 0.8333，但样本数很小，只能作为回归基线。
+运行结果写入 `eval/runs/`，不会提交 Git。检索评估分别记录候选召回、
+Rerank 后结果和证据阈值过滤结果；生成评估单独记录接口成功率、任务路由、
+拒答、引用及人工评分项。不同 dataset fingerprint 的结果不能直接比较。
 
 ## 关键工程问题与处理
 

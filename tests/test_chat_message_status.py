@@ -288,10 +288,13 @@ async def test_safety_classifier_output_becomes_grounded_refusal(monkeypatch):
     )
 
     assert result["answer"] == chat_service.NO_SOURCE_ANSWER
+    assert result["sources"] == []
+    assert result["sources_count"] == 0
     assert (
         create_message.await_args.args[2]
         == chat_service.NO_SOURCE_ANSWER
     )
+    assert create_message.await_args.kwargs["sources"] == []
 
 
 @pytest.mark.asyncio

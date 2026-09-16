@@ -1,4 +1,6 @@
 from asyncio import to_thread
+import logging
+from time import perf_counter
 
 from services.agent_router_service import route_task
 from services.document_service import (
@@ -13,6 +15,7 @@ from services.message_service import (
     set_message_status,
 )
 from services.prompt_service import (
+    build_comparison_prompt,
     build_rag_prompt,
     build_report_prompt,
     build_source_check_prompt,
@@ -21,8 +24,11 @@ from services.prompt_service import (
 )
 from services.query_rewrite_service import rewrite_query
 from services.search_service import (
+    search_comparison_chunks_for_documents,
     search_relevant_chunks,
+    search_relevant_chunks_for_document_queries,
     search_relevant_chunks_for_documents,
+    search_relevant_chunks_for_queries,
     search_summary_chunks,
     search_summary_chunks_for_documents,
 )
@@ -30,7 +36,13 @@ from services.user_service import ALLOWED_USER_TYPES, get_existing_user
 from stores.conversation_store import find_conversation_by_id
 
 
+logger = logging.getLogger(__name__)
 NO_SOURCE_ANSWER = "当前文献未提供相关信息。"
+NO_SOURCE_RESPONSES = {
+    NO_SOURCE_ANSWER,
+    "当前文档未提供相关信息。",
+    "根据当前知识库中的文档，没有检索到足够证据回答这个问题。",
+}
 SAFETY_CLASSIFIER_MARKERS = (
     "user safety:",
     "response safety:",
@@ -44,6 +56,8 @@ def normalize_generated_answer(answer: str) -> str:
         marker in lowered_answer
         for marker in SAFETY_CLASSIFIER_MARKERS
     ):
+        return NO_SOURCE_ANSWER
+    if normalized_answer in NO_SOURCE_RESPONSES:
         return NO_SOURCE_ANSWER
     return normalized_answer
 
@@ -76,7 +90,9 @@ async def prepare_ask_context(
     n_results: int = 3,
     user_type: str | None = None,
     task_type: str = "qa",
+    task_scope: str = "focused",
 ) -> dict:
+    started_at = perf_counter()
     user_id = user_id.strip()
     conversation_id = conversation_id.strip()
     query = query.strip()
@@ -165,12 +181,15 @@ async def prepare_ask_context(
     )
 
     try:
+        rewrite_started_at = perf_counter()
         rewritten_query = await to_thread(
             rewrite_query,
             history,
             query,
             document_language,
         )
+        query_rewrite_ms = (perf_counter() - rewrite_started_at) * 1000
+        retrieval_started_at = perf_counter()
         if task_type == "summary" and kb_id:
             summary_result = await to_thread(
                 search_summary_chunks_for_documents,
@@ -179,9 +198,20 @@ async def prepare_ask_context(
                 rewritten_query,
                 index_generations=index_generations,
                 original_query=query,
+                overview=(task_scope == "knowledge_base_overview"),
             )
             sources = summary_result["sources"]
             retrieval_queries = summary_result["retrieval_queries"]
+        elif task_type == "comparison" and kb_id:
+            comparison_result = await to_thread(
+                search_comparison_chunks_for_documents,
+                user_id,
+                document_ids,
+                rewritten_query,
+                index_generations=index_generations,
+            )
+            sources = comparison_result["sources"]
+            retrieval_queries = comparison_result["retrieval_queries"]
         elif task_type == "summary":
             summary_result = await to_thread(
                 search_summary_chunks,
@@ -191,38 +221,46 @@ async def prepare_ask_context(
                 index_generation_id=index_generations.get(
                     conversation["document_id"]
                 ),
+                original_query=query,
             )
             sources = summary_result["sources"]
             retrieval_queries = summary_result["retrieval_queries"]
         elif kb_id:
+            retrieval_queries = list(
+                dict.fromkeys([query, rewritten_query])
+            )
             sources = await to_thread(
-                search_relevant_chunks_for_documents,
+                search_relevant_chunks_for_document_queries,
                 user_id,
                 document_ids,
-                rewritten_query,
+                retrieval_queries,
                 n_results,
                 index_generations,
             )
-            retrieval_queries = [rewritten_query]
         else:
+            retrieval_queries = list(
+                dict.fromkeys([query, rewritten_query])
+            )
             sources = await to_thread(
-                search_relevant_chunks,
+                search_relevant_chunks_for_queries,
                 user_id,
                 conversation["document_id"],
-                rewritten_query,
+                retrieval_queries,
                 n_results,
                 index_generations.get(conversation["document_id"]),
             )
-            retrieval_queries = [rewritten_query]
+        retrieval_ms = (perf_counter() - retrieval_started_at) * 1000
 
         _enrich_source_filenames(sources, document_filenames)
 
+        context_started_at = perf_counter()
         prompt = build_rag_prompt(
             query,
             sources,
             resolved_user_type,
             history,
         )
+        context_build_ms = (perf_counter() - context_started_at) * 1000
     except Exception as exc:
         await set_message_status(
             user_message["message_id"],
@@ -232,9 +270,23 @@ async def prepare_ask_context(
         )
         raise
 
-
-
-
+    logger.info(
+        "ask_context_prepared user_id=%s conversation_id=%s kb_id=%s "
+        "task_type=%s document_count=%s source_count=%s "
+        "retrieval_query_count=%s query_rewrite_ms=%.2f "
+        "retrieval_ms=%.2f context_build_ms=%.2f total_ms=%.2f",
+        user_id,
+        conversation_id,
+        kb_id,
+        task_type,
+        len(document_ids),
+        len(sources),
+        len(retrieval_queries),
+        query_rewrite_ms,
+        retrieval_ms,
+        context_build_ms,
+        (perf_counter() - started_at) * 1000,
+    )
     return {
         "conversation_id": conversation["_id"],
         "document_id": conversation["document_id"],
@@ -245,6 +297,7 @@ async def prepare_ask_context(
         "history": history,
         "query": query,
         "user_type": resolved_user_type,
+        "task_scope": task_scope,
         "rewritten_query": rewritten_query,
         "retrieval_queries": retrieval_queries,
         "user_message": user_message,
@@ -262,7 +315,15 @@ async def ask_conversation(
     n_results: int = 3,
     user_type: str | None = None,
 ) -> dict:
-    task_type = route_task(query)
+    started_at = perf_counter()
+    task_route = await to_thread(route_task, query)
+    # Compatibility for existing extensions that still return a task label.
+    if isinstance(task_route, str):
+        task_type = task_route
+        task_scope = "focused"
+    else:
+        task_type = task_route["task_type"]
+        task_scope = task_route["scope"]
     context = await prepare_ask_context(
         user_id=user_id,
         conversation_id=conversation_id,
@@ -271,9 +332,11 @@ async def ask_conversation(
         n_results=n_results,
         user_type=user_type,
         task_type=task_type,
+        task_scope=task_scope,
     )
 
     try:
+        generation_started_at = perf_counter()
         if not context["sources_count"]:
             answer = NO_SOURCE_ANSWER
         elif task_type == "report":
@@ -299,6 +362,18 @@ async def ask_conversation(
                 generate_answer,
                 prompt,
                 operation="summary",
+            )
+        elif task_type == "comparison":
+            prompt = build_comparison_prompt(
+                context["query"],
+                context["sources"],
+                context["user_type"],
+                context["history"],
+            )
+            answer = await to_thread(
+                generate_answer,
+                prompt,
+                operation="comparison",
             )
         elif task_type == "term":
             prompt = build_term_prompt(
@@ -332,6 +407,13 @@ async def ask_conversation(
             )
 
         answer = normalize_generated_answer(answer)
+        llm_generation_ms = (
+            perf_counter() - generation_started_at
+        ) * 1000
+
+        if answer == NO_SOURCE_ANSWER:
+            context["sources"] = []
+            context["sources_count"] = 0
 
         assistant_message = await create_message(
             conversation_id,
@@ -355,6 +437,19 @@ async def ask_conversation(
         context["user_message"]["message_id"],
         "completed",
     )
+    logger.info(
+        "ask_completed user_id=%s conversation_id=%s kb_id=%s "
+        "task_type=%s task_scope=%s source_count=%s llm_generation_ms=%.2f "
+        "total_ms=%.2f",
+        user_id,
+        conversation_id,
+        context.get("kb_id"),
+        task_type,
+        task_scope,
+        context["sources_count"],
+        llm_generation_ms,
+        (perf_counter() - started_at) * 1000,
+    )
 
     return {
         "conversation_id": context["conversation_id"],
@@ -369,4 +464,5 @@ async def ask_conversation(
         "retrieval_queries": context["retrieval_queries"],
         "assistant_message": assistant_message,
         "task_type": task_type,
+        "task_scope": task_scope,
     }

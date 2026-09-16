@@ -2,11 +2,14 @@ import logging
 from pathlib import Path
 
 from config import (
+    ANSWER_LLM_API_KEY,
+    ANSWER_LLM_BASE_URL,
+    ANSWER_LLM_MODEL,
     CHROMA_DIR,
+    REWRITE_LLM_API_KEY,
+    REWRITE_LLM_BASE_URL,
+    REWRITE_LLM_MODEL,
     UPLOAD_DIR,
-    OPENROUTER_API_KEY,
-    OPENROUTER_BASE_URL,
-    OPENROUTER_MODEL,
 )
 from stores.database import ping_database
 
@@ -25,9 +28,12 @@ def is_directory_ready(path: Path) -> bool:
 
 def is_llm_configured() -> bool:
     required_values = [
-        OPENROUTER_API_KEY,
-        OPENROUTER_BASE_URL,
-        OPENROUTER_MODEL,
+        REWRITE_LLM_API_KEY,
+        REWRITE_LLM_BASE_URL,
+        REWRITE_LLM_MODEL,
+        ANSWER_LLM_API_KEY,
+        ANSWER_LLM_BASE_URL,
+        ANSWER_LLM_MODEL,
     ]
 
     return all(

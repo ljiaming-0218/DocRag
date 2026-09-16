@@ -1,0 +1,619 @@
+{
+  "scenario": "single_turn",
+  "cases": [
+    {
+      "case_id": "RAG-01",
+      "document_key": "rag",
+      "scenario": "single_turn",
+      "category": "fact",
+      "query": "RAG 模型中的参数化记忆和非参数化记忆分别是什么？",
+      "history": [],
+      "expected_rewritten_query": "RAG 模型中的参数化记忆和非参数化记忆分别是什么？",
+      "reference_answer": "参数化记忆是预训练的序列到序列生成模型；非参数化记忆是由神经检索器访问的 Wikipedia 稠密向量索引。",
+      "answer_points": [
+        "参数化记忆是预训练 seq2seq 生成模型",
+        "非参数化记忆是 Wikipedia 的稠密向量索引",
+        "非参数化记忆由预训练神经检索器访问"
+      ],
+      "gold_pages": [
+        1,
+        2
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "RAG-01-E1",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "the parametric memory is a pre-trained seq2seq model"
+            },
+            {
+              "page": 2,
+              "text": "the parametric memory is a pre-trained seq2seq transformer"
+            }
+          ]
+        },
+        {
+          "evidence_id": "RAG-01-E2",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "the non-parametric memory is a dense vector index of Wikipedia"
+            },
+            {
+              "page": 2,
+              "text": "the non-parametric memory is a dense vector index of Wikipedia"
+            }
+          ]
+        },
+        {
+          "evidence_id": "RAG-01-E3",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "accessed with a pre-trained neural retriever"
+            },
+            {
+              "page": 2,
+              "text": "accessed with a pre-trained neural retriever"
+            }
+          ]
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "RAG-02",
+      "document_key": "rag",
+      "scenario": "single_turn",
+      "category": "comparison",
+      "query": "RAG-Sequence 与 RAG-Token 在使用检索文档生成答案时有什么区别？",
+      "history": [],
+      "expected_rewritten_query": "RAG-Sequence 与 RAG-Token 在使用检索文档生成答案时有什么区别？",
+      "reference_answer": "RAG-Sequence 使用同一个检索文档生成完整序列；RAG-Token 可以在生成每个目标 token 时基于不同的检索文档。",
+      "answer_points": [
+        "RAG-Sequence 对完整生成序列使用同一文档",
+        "RAG-Token 可以为不同目标 token 使用不同文档"
+      ],
+      "gold_pages": [
+        3
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "RAG-02-E1",
+          "page": 3,
+          "text": "RAG-Sequence, the model uses the same document to predict each target token"
+        },
+        {
+          "evidence_id": "RAG-02-E2",
+          "page": 3,
+          "text": "RAG-Token, can predict each target token based on a different document"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "RAG-03",
+      "document_key": "rag",
+      "scenario": "single_turn",
+      "category": "summary",
+      "query": "总结作者评估 RAG 的主要任务类型和实验结论。",
+      "history": [],
+      "expected_rewritten_query": "总结论文中 RAG 的主要评估任务类型和实验结论。",
+      "reference_answer": "论文在开放域问答、MS MARCO 抽象式问答、Jeopardy 问题生成和 FEVER 事实验证等知识密集型任务上评估 RAG。RAG 在三项开放域问答任务上达到当时最佳结果，并且相比仅使用参数化记忆的 BART，生成内容通常更具体、更多样、更符合事实、幻觉更少；替换非参数化索引还可以更新模型使用的外部知识。",
+      "answer_points": [
+        "覆盖开放域问答",
+        "覆盖抽象式问答、问题生成或事实验证",
+        "三项开放域问答达到当时最佳结果",
+        "生成内容更具体、多样或更符合事实",
+        "可通过替换非参数化索引更新知识"
+      ],
+      "gold_pages": [
+        5,
+        6,
+        8
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "RAG-03-E1",
+          "page": 5,
+          "text": "MSMARCO as an open-domain abstractive QA task"
+        },
+        {
+          "evidence_id": "RAG-03-E2",
+          "page": 5,
+          "text": "we study open-domain question generation"
+        },
+        {
+          "evidence_id": "RAG-03-E3",
+          "page": 5,
+          "text": "FEVER [56] requires classifying whether a natural language claim is supported or refuted by Wikipedia"
+        },
+        {
+          "evidence_id": "RAG-03-E4",
+          "page": 5,
+          "text": "On all four open-domain QA tasks, RAG sets a new state of the art"
+        },
+        {
+          "evidence_id": "RAG-03-E5",
+          "page": 6,
+          "text": "RAG models hallucinate less and generate factually correct text more often than BART"
+        },
+        {
+          "evidence_id": "RAG-03-E6",
+          "page": 8,
+          "text": "This shows we can update RAG's world knowledge by simply replacing its non-parametric memory"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "summary"
+    },
+    {
+      "case_id": "RAG-04",
+      "document_key": "rag",
+      "scenario": "single_turn",
+      "category": "unanswerable",
+      "query": "论文是否给出了 RAG 在手机端部署时的延迟、功耗和内存占用数据？",
+      "history": [],
+      "expected_rewritten_query": "论文是否给出了 RAG 在手机端部署时的延迟、功耗和内存占用数据？",
+      "reference_answer": "根据当前论文内容无法确定。论文没有提供手机端部署的延迟、功耗和内存占用实验数据。",
+      "answer_points": [
+        "明确说明论文未提供相关信息",
+        "不编造手机端性能数据"
+      ],
+      "gold_pages": [],
+      "gold_evidence": [],
+      "answerable": false,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "LORA-01",
+      "document_key": "lora",
+      "scenario": "single_turn",
+      "category": "term",
+      "query": "LoRA 的核心机制是什么？训练时哪些参数被冻结，哪些参数被更新？",
+      "history": [],
+      "expected_rewritten_query": "LoRA 的核心机制是什么，训练时哪些参数被冻结、哪些参数被更新？",
+      "reference_answer": "LoRA 将预训练权重的更新量表示为两个低秩矩阵的乘积。训练时原始预训练权重 W0 保持冻结，只更新低秩矩阵 A 和 B，最终用 BA 表示权重更新。",
+      "answer_points": [
+        "用低秩矩阵分解表示权重更新",
+        "冻结原始预训练权重 W0",
+        "训练矩阵 A 和 B",
+        "权重更新写作 BA"
+      ],
+      "gold_pages": [
+        1,
+        2,
+        4
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "LORA-01-E1",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "injects trainable rank decomposition matrices into each layer"
+            },
+            {
+              "page": 4,
+              "text": "representing the latter with a low-rank decomposition"
+            }
+          ]
+        },
+        {
+          "evidence_id": "LORA-01-E2",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "freezes the pre-trained model weights"
+            },
+            {
+              "page": 4,
+              "text": "During training, W0 is frozen and does not receive gradient updates"
+            }
+          ]
+        },
+        {
+          "evidence_id": "LORA-01-E3",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "trainable rank decomposition matrices"
+            },
+            {
+              "page": 4,
+              "text": "A and B contain trainable parameters"
+            }
+          ]
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "LORA-02",
+      "document_key": "lora",
+      "scenario": "single_turn",
+      "category": "fact",
+      "query": "与使用 Adam 全量微调 GPT-3 175B 相比，LoRA 在可训练参数量和 GPU 内存需求上分别降低了多少？",
+      "history": [],
+      "expected_rewritten_query": "与使用 Adam 全量微调 GPT-3 175B 相比，LoRA 在可训练参数量和 GPU 内存需求上分别降低了多少？",
+      "reference_answer": "论文报告 LoRA 可将可训练参数量减少约 10,000 倍，并将 GPU 内存需求降低约 3 倍。",
+      "answer_points": [
+        "可训练参数量减少约 10000 倍",
+        "GPU 内存需求降低约 3 倍"
+      ],
+      "gold_pages": [
+        1
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "LORA-02-E1",
+          "page": 1,
+          "text": "LoRA can reduce the number of trainable parameters by 10,000 times"
+        },
+        {
+          "evidence_id": "LORA-02-E2",
+          "page": 1,
+          "text": "the GPU memory requirement by 3 times"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "LORA-03",
+      "document_key": "lora",
+      "scenario": "single_turn",
+      "category": "comparison",
+      "query": "为什么 LoRA 相比传统 Adapter 更适合对推理延迟敏感的线上服务？",
+      "history": [],
+      "expected_rewritten_query": "为什么 LoRA 相比传统 Adapter 更适合对推理延迟敏感的线上服务？",
+      "reference_answer": "传统 Adapter 会增加额外层和顺序计算，从而引入推理延迟；LoRA 的低秩更新可以在部署时合并进原始权重，因此相对全量微调模型不会增加额外推理延迟。",
+      "answer_points": [
+        "Adapter 增加额外层或顺序计算",
+        "Adapter 可能引入推理延迟",
+        "LoRA 权重可以合并进原始权重",
+        "LoRA 不增加额外推理延迟"
+      ],
+      "gold_pages": [
+        1,
+        2,
+        4,
+        5,
+        9,
+        12
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "LORA-03-E1",
+          "alternatives": [
+            {"page": 2, "text": "often introduce inference latency"},
+            {"page": 4, "text": "The inference latency introduced by adapter layers can be significant"}
+          ]
+        },
+        {
+          "evidence_id": "LORA-03-E2",
+          "alternatives": [
+            {"page": 1, "text": "unlike adapters, no additional inference latency"},
+            {"page": 5, "text": "we do not introduce any additional latency during inference compared to a fine-tuned model"},
+            {"page": 12, "text": "neither introduces inference latency"}
+          ]
+        },
+        {
+          "evidence_id": "LORA-03-E3",
+          "alternatives": [
+            {"page": 4, "text": "we can explicitly compute and store W = W0 + BA and perform inference as usual"},
+            {"page": 9, "text": "our learned weights can be merged with the main weights during inference"}
+          ]
+        }
+      ],
+      "answerable": true,
+      "expected_task": "summary"
+    },
+    {
+      "case_id": "LORA-04",
+      "document_key": "lora",
+      "scenario": "single_turn",
+      "category": "unanswerable",
+      "query": "论文是否在医学影像诊断数据集上验证了 LoRA，并报告了疾病分类准确率？",
+      "history": [],
+      "expected_rewritten_query": "论文是否在医学影像诊断数据集上验证了 LoRA，并报告了疾病分类准确率？",
+      "reference_answer": "根据当前论文内容无法确定。论文没有报告医学影像诊断数据集或疾病分类准确率。",
+      "answer_points": [
+        "明确说明论文未提供相关实验",
+        "不虚构医学数据集或准确率"
+      ],
+      "gold_pages": [],
+      "gold_evidence": [],
+      "answerable": false,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "COT-01",
+      "document_key": "cot",
+      "scenario": "single_turn",
+      "category": "term",
+      "query": "什么是 Chain-of-Thought Prompting，它如何引导模型解决复杂问题？",
+      "history": [],
+      "expected_rewritten_query": "什么是 Chain-of-Thought Prompting，它如何引导模型解决复杂问题？",
+      "reference_answer": "Chain-of-Thought Prompting 是在 few-shot 提示中提供包含中间推理步骤的示例，引导模型生成自己的推理链，将复杂问题分解为多个中间步骤后得到答案。",
+      "answer_points": [
+        "在提示示例中提供中间推理步骤",
+        "引导模型生成推理链",
+        "将多步问题分解为中间步骤"
+      ],
+      "gold_pages": [
+        1,
+        2,
+        3
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "COT-01-E1",
+          "alternatives": [
+            {"page": 1, "text": "generating a chain of thought-a series of intermediate reasoning steps"},
+            {"page": 2, "text": "A chain of thought is a series of intermediate natural language reasoning steps that lead to the final output"}
+          ]
+        },
+        {
+          "evidence_id": "COT-01-E2",
+          "page": 3,
+          "text": "allows models to decompose multi-step problems into intermediate steps"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "COT-02",
+      "document_key": "cot",
+      "scenario": "single_turn",
+      "category": "fact",
+      "query": "论文使用多少个思维链示例，就让 PaLM 540B 在 GSM8K 上达到当时最佳结果？",
+      "history": [],
+      "expected_rewritten_query": "论文使用多少个思维链示例，就让 PaLM 540B 在 GSM8K 上达到当时最佳结果？",
+      "reference_answer": "论文使用了 8 个思维链示例，并报告 PaLM 540B 在 GSM8K 上达到当时最佳准确率，超过带验证器的微调 GPT-3。",
+      "answer_points": [
+        "使用 8 个思维链示例",
+        "PaLM 540B 在 GSM8K 达到当时最佳结果",
+        "超过带验证器的微调 GPT-3"
+      ],
+      "gold_pages": [
+        1,
+        2
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "COT-02-E1",
+          "page": 1,
+          "text": "PaLM 540B with just eight chain-of-thought exemplars achieves state-of-the-art accuracy on the GSM8K benchmark"
+        },
+        {
+          "evidence_id": "COT-02-E2",
+          "page": 1,
+          "text": "surpassing even finetuned GPT-3 with a verifier"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "COT-03",
+      "document_key": "cot",
+      "scenario": "single_turn",
+      "category": "summary",
+      "query": "总结论文评估思维链提示时覆盖的三类推理任务，并各举出至少一个数据集或任务。",
+      "history": [],
+      "expected_rewritten_query": "总结论文评估 Chain-of-Thought Prompting 时覆盖的三类推理任务，并列举对应数据集或任务。",
+      "reference_answer": "论文覆盖三类任务：算术推理，如 GSM8K、SVAMP、MAWPS、AQuA 或 ASDiv；常识推理，如 CSQA、StrategyQA、Date Understanding、Sports Understanding 或 SayCan；符号推理，包括末字母拼接和硬币翻转任务。",
+      "answer_points": [
+        "算术推理及至少一个对应数据集",
+        "常识推理及至少一个对应数据集",
+        "符号推理及至少一个对应任务"
+      ],
+      "gold_pages": [
+        3,
+        4,
+        7,
+        8
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "COT-03-E1",
+          "alternatives": [
+            {"page": 3, "text": "We consider the following five math word problem benchmarks: (1) the GSM8K benchmark of math word problems"},
+            {"page": 4, "text": "math word problems, we used this single set of eight chain of thought exemplars for all benchmarks except AQuA"}
+          ]
+        },
+        {
+          "evidence_id": "COT-03-E2",
+          "alternatives": [
+            {"page": 7, "text": "The popular CSQA (Talmor et al., 2019) asks commonsense questions about the world"},
+            {"page": 7, "text": "the SayCan dataset (Ahn et al., 2022) involves mapping a natural language instruction to a sequence of robot actions"}
+          ]
+        },
+        {
+          "evidence_id": "COT-03-E3",
+          "alternatives": [
+            {"page": 8, "text": "Last letter concatenation. This task asks the model to concatenate the last letters of words in a name"},
+            {"page": 8, "text": "Coin flip. This task asks the model to answer whether a coin is still heads up"}
+          ]
+        }
+      ],
+      "answerable": true,
+      "expected_task": "summary"
+    },
+    {
+      "case_id": "COT-04",
+      "document_key": "cot",
+      "scenario": "single_turn",
+      "category": "unanswerable",
+      "query": "论文是否量化了在线 API 使用思维链提示时的响应延迟和每次请求费用？",
+      "history": [],
+      "expected_rewritten_query": "论文是否量化了在线 API 使用思维链提示时的响应延迟和每次请求费用？",
+      "reference_answer": "根据当前论文内容无法确定。论文没有提供在线 API 响应延迟或每次请求费用的量化结果。",
+      "answer_points": [
+        "明确说明论文未提供相关量化结果",
+        "不编造延迟或费用"
+      ],
+      "gold_pages": [],
+      "gold_evidence": [],
+      "answerable": false,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "RAG-TERM-01",
+      "document_key": "rag",
+      "scenario": "single_turn",
+      "category": "term",
+      "query": "请提取并解释论文中的两个核心术语：参数化记忆和非参数化记忆。",
+      "history": [],
+      "expected_rewritten_query": "请解释 RAG 论文中的参数化记忆和非参数化记忆。",
+      "reference_answer": "参数化记忆是预训练的序列到序列生成模型；非参数化记忆是由神经检索器访问的 Wikipedia 稠密向量索引。",
+      "answer_points": [
+        "参数化记忆是预训练 seq2seq 生成模型",
+        "非参数化记忆是 Wikipedia 的稠密向量索引",
+        "非参数化记忆由预训练神经检索器访问"
+      ],
+      "gold_pages": [
+        1,
+        2
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "RAG-TERM-01-E1",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "the parametric memory is a pre-trained seq2seq model"
+            },
+            {
+              "page": 2,
+              "text": "the parametric memory is a pre-trained seq2seq transformer"
+            }
+          ]
+        },
+        {
+          "evidence_id": "RAG-TERM-01-E2",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "the non-parametric memory is a dense vector index of Wikipedia"
+            },
+            {
+              "page": 2,
+              "text": "the non-parametric memory is a dense vector index of Wikipedia"
+            }
+          ]
+        }
+      ],
+      "answerable": true,
+      "expected_task": "term"
+    },
+    {
+      "case_id": "COT-TERM-01",
+      "document_key": "cot",
+      "scenario": "single_turn",
+      "category": "term",
+      "query": "请解释论文中的术语 Chain-of-Thought Prompting 及其作用。",
+      "history": [],
+      "expected_rewritten_query": "请解释 Chain-of-Thought Prompting 的定义及其在复杂推理中的作用。",
+      "reference_answer": "Chain-of-Thought Prompting 在 few-shot 提示中提供包含中间推理步骤的示例，引导模型生成推理链并分解复杂问题。",
+      "answer_points": [
+        "在提示示例中提供中间推理步骤",
+        "引导模型生成推理链",
+        "将多步问题分解为中间步骤"
+      ],
+      "gold_pages": [
+        1,
+        2,
+        3
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "COT-TERM-01-E1",
+          "alternatives": [
+            {"page": 1, "text": "generating a chain of thought-a series of intermediate reasoning steps"},
+            {"page": 2, "text": "A chain of thought is a series of intermediate natural language reasoning steps that lead to the final output"}
+          ]
+        },
+        {
+          "evidence_id": "COT-TERM-01-E2",
+          "page": 3,
+          "text": "allows models to decompose multi-step problems into intermediate steps"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "term"
+    },
+    {
+      "case_id": "RAG-SOURCE-01",
+      "document_key": "rag",
+      "scenario": "single_turn",
+      "category": "source_check",
+      "query": "请核查以下说法是否有论文证据：RAG-Token 允许生成每个 token 时使用不同的检索文档。",
+      "history": [],
+      "expected_rewritten_query": "RAG-Token 是否允许生成每个 token 时使用不同的检索文档？",
+      "reference_answer": "支持。论文说明 RAG-Token 可以在生成每个目标 token 时基于不同的检索文档。",
+      "answer_points": [
+        "核查结果为支持",
+        "RAG-Token 可为不同目标 token 使用不同文档"
+      ],
+      "gold_pages": [
+        3
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "RAG-SOURCE-01-E1",
+          "page": 3,
+          "text": "RAG-Token, can predict each target token based on a different document"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "source_check"
+    },
+    {
+      "case_id": "LORA-SOURCE-01",
+      "document_key": "lora",
+      "scenario": "single_turn",
+      "category": "source_check",
+      "query": "请核查以下说法是否有论文依据：LoRA 训练时冻结预训练权重，只更新低秩矩阵。",
+      "history": [],
+      "expected_rewritten_query": "LoRA 训练时是否冻结预训练权重并只更新低秩矩阵？",
+      "reference_answer": "支持。论文将权重更新表示为低秩矩阵 A 和 B 的乘积，训练时冻结原始预训练权重 W0，只更新 A 和 B。",
+      "answer_points": [
+        "核查结果为支持",
+        "冻结原始预训练权重 W0",
+        "训练低秩矩阵 A 和 B"
+      ],
+      "gold_pages": [
+        1,
+        2,
+        4
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "LORA-SOURCE-01-E1",
+          "alternatives": [
+            {"page": 1, "text": "freezes the pre-trained model weights"},
+            {"page": 2, "text": "while keeping the pre-trained weights frozen"},
+            {"page": 4, "text": "During training, W0 is frozen and does not receive gradient updates"}
+          ]
+        },
+        {
+          "evidence_id": "LORA-SOURCE-01-E2",
+          "alternatives": [
+            {"page": 1, "text": "injects trainable rank decomposition matrices into each layer"},
+            {"page": 2, "text": "optimizing rank decomposition matrices of the dense layers' change during adaptation"},
+            {"page": 4, "text": "A and B contain trainable parameters"}
+          ]
+        }
+      ],
+      "answerable": true,
+      "expected_task": "source_check"
+    }
+  ]
+}

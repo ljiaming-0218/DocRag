@@ -2,46 +2,34 @@
 
 import argparse
 import copy
-import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
-from pathlib import Path
 from time import perf_counter
 from typing import Callable
 
-import requests
+from eval.core import (
+    BACKEND_ROOT,
+    DATASET_DIR,
+    RUNS_DIR,
+    EvalApiClient,
+    build_run_id,
+    dataset_fingerprint,
+    load_json,
+    save_json,
+    utc_now_iso,
+)
+from eval.metrics.retrieval import (
+    calculate_evidence_metrics,
+    summarize_retrieval_results,
+)
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-BACKEND_DIR = ROOT_DIR / "medrag" / "backend"
-DATASET_DIR = Path(__file__).resolve().parent / "rag_dataset"
-PDF_DIR = DATASET_DIR / "pdfs"
-RESULTS_DIR = DATASET_DIR / "results" / "retrieval_runs"
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_MODES = ("dense", "dense_rerank", "hybrid_rerank")
 SUPPORTED_MODES = set(DEFAULT_MODES)
 
 logger = logging.getLogger(__name__)
-
-
-def load_json(path: Path) -> list[dict]:
-    if not path.exists():
-        raise FileNotFoundError(f"JSON 文件不存在: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def save_json(data: dict, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-def build_run_id() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def validate_run_config(
@@ -62,103 +50,35 @@ def validate_run_config(
         raise ValueError("candidate_k 不能小于 top_k")
 
 
-def request_json(
-    session: requests.Session,
-    method: str,
-    url: str,
-    **kwargs,
-) -> dict:
-    kwargs.setdefault("timeout", 180)
-    response = session.request(method, url, **kwargs)
-    response.raise_for_status()
-    try:
-        return response.json()
-    except requests.exceptions.JSONDecodeError as error:
-        raise ValueError(f"接口没有返回 JSON: {response.text[:300]}") from error
+def select_cases(cases: list[dict], case_ids: list[str] | None) -> list[dict]:
+    if not case_ids:
+        return cases
+    requested = set(case_ids)
+    selected = [case for case in cases if case.get("case_id") in requested]
+    found = {case.get("case_id") for case in selected}
+    missing = requested - found
+    if missing:
+        raise ValueError("找不到评估案例: " + ", ".join(sorted(missing)))
+    return selected
 
 
-def check_api(session: requests.Session, base_url: str) -> None:
-    response = session.get(f"{base_url}/health", timeout=10)
-    response.raise_for_status()
-
-
-def authenticate_eval_user(
-    session: requests.Session,
-    base_url: str,
-    username: str,
-    password: str,
-) -> str:
-    credentials = {"username": username, "password": password}
-    response = session.post(
-        f"{base_url}/auth/login",
-        json=credentials,
-        timeout=30,
-    )
-
-    if response.status_code == 401:
-        response = session.post(
-            f"{base_url}/auth/register",
-            json={**credentials, "default_user_type": "general"},
-            timeout=30,
-        )
-
-    response.raise_for_status()
-    payload = response.json()
-    token = payload["access_token"]
-    user_id = payload["user"]["user_id"]
-    session.headers.update({"Authorization": f"Bearer {token}"})
-    return user_id
-
-
-def index_documents(
-    session: requests.Session,
-    base_url: str,
-    user_id: str,
-    documents: list[dict],
-    chunk_size: int,
-    chunk_overlap: int,
-    chunk_strategy: str,
-) -> dict[str, dict]:
-    indexed_documents = {}
-    for document in documents:
-        pdf_path = PDF_DIR / document["filename"]
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"评估 PDF 不存在: {pdf_path}")
-
-        params = {
-            "user_id": user_id,
-            "chunk_size": chunk_size,
-            "chunk_overlap": chunk_overlap,
-            "strategy": chunk_strategy,
-        }
-        with pdf_path.open("rb") as pdf_file:
-            payload = request_json(
-                session,
-                "POST",
-                f"{base_url}/pdf/index",
-                params=params,
-                files={
-                    "file": (
-                        document["filename"],
-                        pdf_file,
-                        "application/pdf",
-                    )
-                },
-            )
-
-        indexed_documents[document["document_key"]] = {
-            "document_id": payload["document_id"],
-            "active_index_generation_id": payload.get(
-                "active_index_generation_id"
-            ),
-            "index_fingerprint": payload.get("index_fingerprint"),
-        }
-    return indexed_documents
+def select_documents(documents: list[dict], cases: list[dict]) -> list[dict]:
+    required_keys = {case["document_key"] for case in cases}
+    selected = [
+        document
+        for document in documents
+        if document.get("document_key") in required_keys
+    ]
+    found = {document.get("document_key") for document in selected}
+    missing = required_keys - found
+    if missing:
+        raise ValueError("找不到评估文档: " + ", ".join(sorted(missing)))
+    return selected
 
 
 def load_retrieval_dependencies() -> dict[str, Callable]:
-    if str(BACKEND_DIR) not in sys.path:
-        sys.path.insert(0, str(BACKEND_DIR))
+    if str(BACKEND_ROOT) not in sys.path:
+        sys.path.insert(0, str(BACKEND_ROOT))
 
     from services.evidence_filter_service import filter_relevant_evidence
     from services.rerank_service import rerank_chunks
@@ -325,12 +245,14 @@ def run_question(
     top_k: int,
 ) -> dict:
     result = {
-        "question_id": question["question_id"],
+        "case_id": question["case_id"],
         "document_key": question["document_key"],
-        "question_type": question["question_type"],
-        "query": question["question"],
+        "scenario": question["scenario"],
+        "category": question["category"],
+        "query": question["query"],
+        "answerable": question["answerable"],
         "query_variant": "original",
-        "gold_source_pages": question.get("source_pages") or [],
+        "gold_pages": question.get("gold_pages") or [],
         "gold_evidence": question.get("gold_evidence") or [],
         "status": "success",
         "error": None,
@@ -347,15 +269,35 @@ def run_question(
                 index_generation_id=document_scope.get(
                     "active_index_generation_id"
                 ),
-                query=question["question"],
+                query=question["query"],
                 candidate_k=candidate_k,
                 top_k=top_k,
             )
             mode_result["page_metrics"] = calculate_page_metrics(
-                result["gold_source_pages"],
+                result["gold_pages"],
                 mode_result["final_results"],
                 top_k,
             )
+            mode_result["metrics"] = {}
+            stage_specs = (
+                ("candidate", "candidates", candidate_k),
+                ("final", "final_results", top_k),
+                ("filtered", "filtered_results", top_k),
+            )
+            for stage_name, result_key, stage_top_k in stage_specs:
+                stage_candidates = mode_result[result_key]
+                mode_result["metrics"][stage_name] = {
+                    "evidence": calculate_evidence_metrics(
+                        result["gold_evidence"],
+                        stage_candidates,
+                        stage_top_k,
+                    ),
+                    "page": calculate_page_metrics(
+                        result["gold_pages"],
+                        stage_candidates,
+                        stage_top_k,
+                    ),
+                }
             result["modes"][mode] = mode_result
         except Exception as error:
             result["status"] = "partial_error"
@@ -385,6 +327,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk-overlap", type=int, default=50)
     parser.add_argument("--chunk-strategy", default="recursive")
     parser.add_argument(
+        "--case-id",
+        action="append",
+        dest="case_ids",
+        help="只运行指定案例；可重复传入。",
+    )
+    parser.add_argument(
         "--username",
         default=os.environ.get(
             "DOCRAG_EVAL_USERNAME",
@@ -409,41 +357,41 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
-    run_id = build_run_id()
-    run_dir = RESULTS_DIR / run_id
-    documents = load_json(DATASET_DIR / "documents.json")
-    questions = [
-        question
-        for question in load_json(DATASET_DIR / "questions.json")
-        if question.get("question_type") != "follow_up"
-    ]
+    documents_path = DATASET_DIR / "documents.json"
+    cases_path = DATASET_DIR / "single_turn.json"
+    run_id = build_run_id("retrieval")
+    run_dir = RUNS_DIR / "retrieval" / run_id
+    documents = load_json(documents_path)
+    questions = load_json(cases_path)["cases"]
+    questions = select_cases(questions, args.case_ids)
+    documents = select_documents(documents, questions)
 
-    with requests.Session() as session:
+    with EvalApiClient(args.base_url) as client:
         print("1. 检查本地后端")
-        check_api(session, args.base_url)
+        client.check_ready()
         print("2. 登录或创建评估用户")
-        user_id = authenticate_eval_user(
-            session,
-            args.base_url,
+        user_id = client.authenticate(
             args.username,
             args.password,
         )
         print("3. 复用或建立评估文档索引")
-        document_scopes = index_documents(
-            session,
-            args.base_url,
+        document_scopes = client.index_documents(
             user_id,
             documents,
-            args.chunk_size,
-            args.chunk_overlap,
-            args.chunk_strategy,
+            chunk_size=args.chunk_size,
+            chunk_overlap=args.chunk_overlap,
+            chunk_strategy=args.chunk_strategy,
         )
 
     print("4. 加载本地检索模型")
     dependencies = load_retrieval_dependencies()
     result_data = {
         "run_id": run_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": utc_now_iso(),
+        "dataset_fingerprint": dataset_fingerprint(
+            documents_path,
+            cases_path,
+        ),
         "config": {
             "base_url": args.base_url,
             "modes": args.modes,
@@ -452,6 +400,7 @@ def main() -> None:
             "chunk_size": args.chunk_size,
             "chunk_overlap": args.chunk_overlap,
             "chunk_strategy": args.chunk_strategy,
+            "case_ids": args.case_ids,
             "query_variant": "original",
             "llm_called": False,
         },
@@ -462,8 +411,8 @@ def main() -> None:
 
     print(f"5. 执行 {len(questions)} 道检索题")
     for index, question in enumerate(questions, start=1):
-        question_id = question["question_id"]
-        print(f"[{index}/{len(questions)}] {question_id}")
+        case_id = question["case_id"]
+        print(f"[{index}/{len(questions)}] {case_id}")
         document_scope = document_scopes[question["document_key"]]
         case_result = run_question(
             question,
@@ -475,9 +424,13 @@ def main() -> None:
             top_k=args.top_k,
         )
         result_data["results"].append(case_result)
-        save_json(result_data, run_dir / "retrieval_results.json")
+        save_json(result_data, run_dir / "results.json")
 
-    save_json(result_data["config"], run_dir / "run_config.json")
+    save_json(result_data["config"], run_dir / "config.json")
+    save_json(
+        summarize_retrieval_results(result_data),
+        run_dir / "summary.json",
+    )
     print(f"检索评估完成: {run_dir}")
 
 

@@ -69,6 +69,22 @@ def build_summary_prompt(
     )
 
 
+def build_comparison_prompt(
+    query: str,
+    sources: list[dict],
+    user_type: str,
+    history: list[dict],
+) -> str:
+    prompt_template = load_prompt_template("comparison_prompt.txt")
+    return prompt_template.format(
+        history=build_history_context(history or []),
+        query=query,
+        context=build_context(sources),
+        user_type=user_type,
+        user_type_instruction=build_user_type_instruction(user_type),
+    )
+
+
 def build_term_prompt(
     query: str,
     sources: list[dict],

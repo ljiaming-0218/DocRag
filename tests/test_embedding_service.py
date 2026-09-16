@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -85,3 +86,102 @@ def test_embed_chunks_stops_after_failed_batch(monkeypatch):
     assert chunks[0]["embedding"] == [0.1]
     assert chunks[1]["embedding"] == [0.2]
     assert "embedding" not in chunks[2]
+
+
+def test_embedding_client_is_initialized_once(monkeypatch):
+    created_clients = []
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            created_clients.append(kwargs)
+
+    monkeypatch.setattr(service, "_client", None)
+    monkeypatch.setattr(service, "OpenAI", FakeOpenAI)
+    monkeypatch.setattr(service, "EMBEDDING_API_KEY", "test-key")
+    monkeypatch.setattr(
+        service,
+        "EMBEDDING_API_BASE",
+        "https://api.example.com/v1",
+    )
+
+    first_client = service.get_embedding_client()
+    second_client = service.get_embedding_client()
+
+    assert first_client is second_client
+    assert created_clients == [{
+        "api_key": "test-key",
+        "base_url": "https://api.example.com/v1",
+        "timeout": service.EMBEDDING_TIMEOUT_SECONDS,
+        "max_retries": service.EMBEDDING_MAX_RETRIES,
+    }]
+
+
+def test_get_embeddings_restores_api_result_order(monkeypatch):
+    create = Mock(return_value=SimpleNamespace(data=[
+        SimpleNamespace(index=1, embedding=[0.3, 0.4]),
+        SimpleNamespace(index=0, embedding=[0.1, 0.2]),
+    ]))
+    client = SimpleNamespace(
+        embeddings=SimpleNamespace(create=create),
+    )
+    monkeypatch.setattr(
+        service,
+        "get_embedding_client",
+        Mock(return_value=client),
+    )
+    monkeypatch.setattr(service, "EMBEDDING_DIMENSION", 2)
+
+    result = service.get_embeddings(["first", "second"])
+
+    assert result == [[0.1, 0.2], [0.3, 0.4]]
+    create.assert_called_once_with(
+        model=service.EMBEDDING_MODEL,
+        input=["first", "second"],
+    )
+
+
+def test_get_embeddings_rejects_dimension_mismatch(monkeypatch):
+    client = SimpleNamespace(
+        embeddings=SimpleNamespace(
+            create=Mock(return_value=SimpleNamespace(data=[
+                SimpleNamespace(index=0, embedding=[0.1, 0.2]),
+            ])),
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "get_embedding_client",
+        Mock(return_value=client),
+    )
+    monkeypatch.setattr(service, "EMBEDDING_DIMENSION", 1024)
+
+    with pytest.raises(RuntimeError, match="Embedding 维度与配置不一致"):
+        service.get_embeddings(["text"])
+
+
+def test_get_embeddings_rejects_invalid_response_indices(monkeypatch):
+    client = SimpleNamespace(
+        embeddings=SimpleNamespace(
+            create=Mock(return_value=SimpleNamespace(data=[
+                SimpleNamespace(index=0, embedding=[0.1]),
+                SimpleNamespace(index=0, embedding=[0.2]),
+            ])),
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "get_embedding_client",
+        Mock(return_value=client),
+    )
+    monkeypatch.setattr(service, "EMBEDDING_DIMENSION", 1)
+
+    with pytest.raises(RuntimeError, match="返回索引与输入顺序不一致"):
+        service.get_embeddings(["first", "second"])
+
+
+def test_embedding_client_requires_api_key(monkeypatch):
+    monkeypatch.setattr(service, "_client", None)
+    monkeypatch.setattr(service, "EMBEDDING_API_KEY", "")
+
+    with pytest.raises(RuntimeError, match="EMBEDDING_API_KEY 未配置"):
+        service.get_embedding_client()

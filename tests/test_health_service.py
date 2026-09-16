@@ -46,19 +46,24 @@ async def test_readiness_returns_ready(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         health_service,
-        "OPENROUTER_API_KEY",
+        "REWRITE_LLM_API_KEY",
         "test-key",
     )
     monkeypatch.setattr(
         health_service,
-        "OPENROUTER_BASE_URL",
+        "REWRITE_LLM_BASE_URL",
         "https://example.com",
     )
     monkeypatch.setattr(
         health_service,
-        "OPENROUTER_MODEL",
+        "REWRITE_LLM_MODEL",
         "test-model",
     )
+    monkeypatch.setattr(health_service, "ANSWER_LLM_API_KEY", "test-key")
+    monkeypatch.setattr(
+        health_service, "ANSWER_LLM_BASE_URL", "https://example.com"
+    )
+    monkeypatch.setattr(health_service, "ANSWER_LLM_MODEL", "test-model")
 
     result = await health_service.check_readiness()
 
@@ -89,19 +94,24 @@ async def test_readiness_handles_mongodb_failure(
     )
     monkeypatch.setattr(
         health_service,
-        "OPENROUTER_API_KEY",
+        "REWRITE_LLM_API_KEY",
         "test-key",
     )
     monkeypatch.setattr(
         health_service,
-        "OPENROUTER_BASE_URL",
+        "REWRITE_LLM_BASE_URL",
         "https://example.com",
     )
     monkeypatch.setattr(
         health_service,
-        "OPENROUTER_MODEL",
+        "REWRITE_LLM_MODEL",
         "test-model",
     )
+    monkeypatch.setattr(health_service, "ANSWER_LLM_API_KEY", "test-key")
+    monkeypatch.setattr(
+        health_service, "ANSWER_LLM_BASE_URL", "https://example.com"
+    )
+    monkeypatch.setattr(health_service, "ANSWER_LLM_MODEL", "test-model")
 
     result = await health_service.check_readiness()
 
@@ -133,19 +143,24 @@ async def test_readiness_detects_missing_directory(
     )
     monkeypatch.setattr(
         health_service,
-        "OPENROUTER_API_KEY",
+        "REWRITE_LLM_API_KEY",
         "test-key",
     )
     monkeypatch.setattr(
         health_service,
-        "OPENROUTER_BASE_URL",
+        "REWRITE_LLM_BASE_URL",
         "https://example.com",
     )
     monkeypatch.setattr(
         health_service,
-        "OPENROUTER_MODEL",
+        "REWRITE_LLM_MODEL",
         "test-model",
     )
+    monkeypatch.setattr(health_service, "ANSWER_LLM_API_KEY", "test-key")
+    monkeypatch.setattr(
+        health_service, "ANSWER_LLM_BASE_URL", "https://example.com"
+    )
+    monkeypatch.setattr(health_service, "ANSWER_LLM_MODEL", "test-model")
 
     result = await health_service.check_readiness()
 

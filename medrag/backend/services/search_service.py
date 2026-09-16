@@ -1,6 +1,13 @@
 import logging
+from time import perf_counter
 
-from config import RETRIEVAL_MODE
+from config import (
+    RETRIEVAL_MODE,
+    SUMMARY_CONTEXT_K,
+    SUMMARY_SEED_K,
+    SUMMARY_SUBQUERY_KEEP_K,
+    SUMMARY_SUBQUERY_RETRIEVE_K,
+)
 from services.embedding_service import get_embedding
 from services.evidence_filter_service import filter_relevant_evidence
 from services.rerank_service import rerank_chunks
@@ -16,18 +23,6 @@ from services.vector_store_service import (
 
 logger = logging.getLogger(__name__)
 SUPPORTED_RETRIEVAL_MODES = {"dense", "hybrid"}
-KNOWLEDGE_BASE_OVERVIEW_PHRASES = (
-    "这个库里面的文档",
-    "这个知识库里的文档",
-    "知识库中的文档",
-    "这些文档都讲",
-    "所有文档都讲",
-    "what do the documents",
-    "what the documents",
-    "documents in the current literature",
-    "overview of the documents",
-    "overview of this knowledge base",
-)
 
 
 def resolve_retrieval_mode() -> str:
@@ -76,6 +71,7 @@ def fuse_dense_and_sparse_candidates(
     candidate_k: int,
     index_generations: dict[str, str | None] | None = None,
 ) -> list[dict]:
+    sparse_started_at = perf_counter()
     try:
         if index_generations and any(index_generations.values()):
             sparse_candidates = retrieve_sparse_candidates(
@@ -97,15 +93,31 @@ def fuse_dense_and_sparse_candidates(
             for candidate in sparse_candidates
             if is_useful_chunk(candidate.get("文本块", ""))
         ]
+        logger.info(
+            "bm25_retrieval_completed query_length=%s candidates=%s "
+            "bm25_retrieval_ms=%.2f",
+            len(query),
+            len(sparse_candidates),
+            (perf_counter() - sparse_started_at) * 1000,
+        )
         if not sparse_candidates:
             return dense_candidates
 
+        rrf_started_at = perf_counter()
         fused_candidates = reciprocal_rank_fusion(
             {
                 "dense": dense_candidates,
                 "sparse": sparse_candidates,
             },
             limit=candidate_k,
+        )
+        logger.info(
+            "rrf_completed dense_candidates=%s sparse_candidates=%s "
+            "fused_candidates=%s rrf_ms=%.2f",
+            len(dense_candidates),
+            len(sparse_candidates),
+            len(fused_candidates),
+            (perf_counter() - rrf_started_at) * 1000,
         )
         return fused_candidates or dense_candidates
     except Exception as error:
@@ -123,6 +135,7 @@ def retrieve_dense_candidate_chunks(
     candidate_k: int,
     index_generation_id: str | None = None,
 ) -> list[dict]:
+    started_at = perf_counter()
     query_embedding = get_embedding(query)
     query_arguments = [
         user_id,
@@ -133,7 +146,15 @@ def retrieve_dense_candidate_chunks(
     if index_generation_id:
         query_arguments.append(index_generation_id)
     search_results = query_chunks(*query_arguments)
-    return format_dense_candidates(search_results)
+    candidates = format_dense_candidates(search_results)
+    logger.info(
+        "dense_retrieval_completed document_count=1 query_length=%s "
+        "candidates=%s dense_retrieval_ms=%.2f",
+        len(query),
+        len(candidates),
+        (perf_counter() - started_at) * 1000,
+    )
+    return candidates
 
 
 def retrieve_candidate_chunks(
@@ -199,6 +220,63 @@ def search_relevant_chunks(
     return filter_relevant_evidence(ranked_chunks)
 
 
+def _normalize_retrieval_queries(queries: list[str]) -> list[str]:
+    normalized_queries = []
+    seen = set()
+    for query in queries:
+        query = query.strip()
+        normalized = query.casefold()
+        if query and normalized not in seen:
+            normalized_queries.append(query)
+            seen.add(normalized)
+    if not normalized_queries:
+        raise ValueError("queries cannot be empty")
+    return normalized_queries
+
+
+def search_relevant_chunks_for_queries(
+    user_id: str,
+    document_id: str,
+    queries: list[str],
+    n_results: int = 3,
+    index_generation_id: str | None = None,
+) -> list[dict]:
+    """Retrieve with original and rewritten queries before one rerank pass."""
+    if n_results <= 0:
+        raise ValueError("n_results 必须大于 0")
+    queries = _normalize_retrieval_queries(queries)
+    if len(queries) == 1:
+        return search_relevant_chunks(
+            user_id,
+            document_id,
+            queries[0],
+            n_results,
+            index_generation_id,
+        )
+
+    candidate_k = n_results * 5
+    candidates_by_query = {
+        f"query_{index}": retrieve_candidate_chunks(
+            user_id,
+            document_id,
+            query,
+            candidate_k,
+            index_generation_id,
+        )
+        for index, query in enumerate(queries)
+    }
+    candidates = reciprocal_rank_fusion(
+        candidates_by_query,
+        limit=candidate_k,
+    )
+    if not candidates:
+        return []
+    rerank_query = "\n".join(queries)
+    return filter_relevant_evidence(
+        rerank_chunks(rerank_query, candidates, n_results)
+    )
+
+
 def retrieve_candidate_chunks_for_documents(
     user_id: str,
     document_ids: list[str],
@@ -218,6 +296,7 @@ def retrieve_candidate_chunks_for_documents(
         raise ValueError("candidate_k must be greater than 0")
 
     retrieval_mode = resolve_retrieval_mode()
+    dense_started_at = perf_counter()
     query_arguments = [
         user_id,
         document_ids,
@@ -229,6 +308,14 @@ def retrieve_candidate_chunks_for_documents(
     search_results = query_chunks_by_documents(*query_arguments)
 
     dense_candidates = format_dense_candidates(search_results)
+    logger.info(
+        "dense_retrieval_completed document_count=%s query_length=%s "
+        "candidates=%s dense_retrieval_ms=%.2f",
+        len(document_ids),
+        len(query),
+        len(dense_candidates),
+        (perf_counter() - dense_started_at) * 1000,
+    )
     if retrieval_mode == "dense":
         return dense_candidates
     fusion_arguments = [
@@ -266,16 +353,147 @@ def search_relevant_chunks_for_documents(
     return filter_relevant_evidence(ranked_chunks)
 
 
+def search_relevant_chunks_for_document_queries(
+    user_id: str,
+    document_ids: list[str],
+    queries: list[str],
+    n_results: int = 3,
+    index_generations: dict[str, str | None] | None = None,
+) -> list[dict]:
+    """Run multi-query retrieval over a knowledge-base document scope."""
+    if n_results <= 0:
+        raise ValueError("n_results must be greater than 0")
+    queries = _normalize_retrieval_queries(queries)
+    if len(queries) == 1:
+        return search_relevant_chunks_for_documents(
+            user_id,
+            document_ids,
+            queries[0],
+            n_results,
+            index_generations,
+        )
+
+    candidate_k = n_results * 5
+    candidates_by_query = {
+        f"query_{index}": retrieve_candidate_chunks_for_documents(
+            user_id,
+            document_ids,
+            query,
+            candidate_k,
+            index_generations,
+        )
+        for index, query in enumerate(queries)
+    }
+    candidates = reciprocal_rank_fusion(
+        candidates_by_query,
+        limit=candidate_k,
+    )
+    if not candidates:
+        return []
+    rerank_query = "\n".join(queries)
+    return filter_relevant_evidence(
+        rerank_chunks(rerank_query, candidates, n_results)
+    )
+
+
+def search_comparison_chunks_for_documents(
+    user_id: str,
+    document_ids: list[str],
+    query: str,
+    per_document_candidate_k: int = 8,
+    per_document_keep: int = 2,
+    context_k: int = 12,
+    index_generations: dict[str, str | None] | None = None,
+) -> dict:
+    """Retrieve comparison evidence without allowing one document to dominate."""
+    if not document_ids:
+        raise ValueError("document_ids cannot be empty")
+    if per_document_candidate_k <= 0:
+        raise ValueError("per_document_candidate_k must be greater than 0")
+    if per_document_keep <= 0:
+        raise ValueError("per_document_keep must be greater than 0")
+    if per_document_keep > per_document_candidate_k:
+        raise ValueError(
+            "per_document_keep cannot exceed per_document_candidate_k"
+        )
+    if context_k <= 0:
+        raise ValueError("context_k must be greater than 0")
+
+    ranked_by_document = {}
+    for document_id in document_ids:
+        generation_id = (
+            index_generations.get(document_id)
+            if index_generations
+            else None
+        )
+        candidates = retrieve_candidate_chunks(
+            user_id,
+            document_id,
+            query,
+            per_document_candidate_k,
+            generation_id,
+        )
+        if not candidates:
+            continue
+
+        ranked = rerank_chunks(
+            query,
+            candidates,
+            min(per_document_keep, len(candidates)),
+        )
+        ranked = filter_relevant_evidence(ranked)
+        if ranked:
+            ranked_by_document[document_id] = ranked
+
+    return {
+        "sources": select_document_balanced_chunks(
+            ranked_by_document,
+            document_ids,
+            context_k,
+        ),
+        "retrieval_queries": [query],
+    }
+
+
+def select_document_balanced_chunks(
+    chunks_by_document: dict[str, list[dict]],
+    document_ids: list[str],
+    limit: int,
+) -> list[dict]:
+    """Round-robin ranked chunks so every represented document gets a turn."""
+    if limit <= 0:
+        raise ValueError("limit must be greater than 0")
+
+    selected = []
+    rank = 0
+    while len(selected) < limit:
+        added = False
+        for document_id in document_ids:
+            document_chunks = chunks_by_document.get(document_id, [])
+            if rank >= len(document_chunks):
+                continue
+            selected.append(document_chunks[rank])
+            added = True
+            if len(selected) >= limit:
+                break
+        if not added:
+            break
+        rank += 1
+    return selected
+
+
 def search_summary_chunks(
     user_id: str,
     document_id: str,
     query: str,
-    seed_k: int = 5,
-    per_query_k: int = 10,
-    per_query_keep: int = 4,
-    context_k: int = 12,
+    seed_k: int = SUMMARY_SEED_K,
+    per_query_k: int = SUMMARY_SUBQUERY_RETRIEVE_K,
+    per_query_keep: int = SUMMARY_SUBQUERY_KEEP_K,
+    context_k: int = SUMMARY_CONTEXT_K,
     index_generation_id: str | None = None,
+    original_query: str | None = None,
 ) -> dict:
+    started_at = perf_counter()
     if seed_k <= 0:
         raise ValueError("seed_k 必须大于 0")
     if per_query_k <= 0:
@@ -290,37 +508,50 @@ def search_summary_chunks(
     if per_query_keep > per_query_k:
         raise ValueError("per_query_keep 不能大于 per_query_k")
     
-    seed_candidates = retrieve_candidate_chunks(
-        user_id,
-        document_id,
+    base_queries = _normalize_retrieval_queries([
+        original_query or query,
         query,
-        max(seed_k * 3, per_query_k),
-        index_generation_id,
-    )
-    if not seed_candidates:
-        return {
-            "sources": [],
-            "retrieval_queries": [query],
-        }
+    ])
+    merged_chunks = {}
+    for base_query in base_queries:
+        seed_candidates = retrieve_candidate_chunks(
+            user_id,
+            document_id,
+            base_query,
+            max(seed_k * 3, per_query_k),
+            index_generation_id,
+        )
+        if not seed_candidates:
+            continue
+        seed_sources = filter_relevant_evidence(
+            rerank_chunks(
+                base_query,
+                seed_candidates,
+                min(seed_k, len(seed_candidates)),
+            )
+        )
+        merge_candidate_chunks(
+            merged_chunks,
+            seed_sources,
+            base_query,
+        )
 
-    seed_sources = rerank_chunks(
-        query,
-        seed_candidates,
-        min(seed_k, len(seed_candidates)),
+    seed_sources = (
+        select_query_covered_chunks(
+            list(merged_chunks.values()),
+            base_queries,
+            seed_k,
+        )
+        if merged_chunks
+        else []
     )
     subqueries = build_summary_subqueries(query, seed_sources)
-    retrieval_queries = list(
-        dict.fromkeys([query, *subqueries])
-    )
+    retrieval_queries = _normalize_retrieval_queries([
+        *base_queries,
+        *subqueries,
+    ])
 
-    merged_chunks = {}
-    merge_candidate_chunks(
-        merged_chunks,
-        seed_sources,
-        query,
-    )
-
-    for retrieval_query in retrieval_queries[1:]:
+    for retrieval_query in retrieval_queries[len(base_queries):]:
         candidates = retrieve_candidate_chunks(
             user_id,
             document_id,
@@ -331,10 +562,12 @@ def search_summary_chunks(
         if not candidates:
             continue
 
-        ranked_candidates = rerank_chunks(
-            retrieval_query,
-            candidates,
-            min(per_query_keep, len(candidates)),
+        ranked_candidates = filter_relevant_evidence(
+            rerank_chunks(
+                retrieval_query,
+                candidates,
+                min(per_query_keep, len(candidates)),
+            )
         )
 
         merge_candidate_chunks(
@@ -349,15 +582,19 @@ def search_summary_chunks(
             "retrieval_queries": retrieval_queries,
         }
 
-    ranked_chunks = rerank_chunks(
-        query,
+    sources = select_query_covered_chunks(
         list(merged_chunks.values()),
-        len(merged_chunks),
-    )
-    ranked_chunks = filter_relevant_evidence(ranked_chunks)
-    sources = select_diverse_chunks(
-        ranked_chunks,
+        retrieval_queries,
         context_k,
+    )
+    logger.info(
+        "summary_retrieval_completed document_count=1 subquery_count=%s "
+        "summary_retrieve_count=%s summary_final_context_count=%s "
+        "total_ms=%.2f",
+        len(retrieval_queries),
+        len(merged_chunks),
+        len(sources),
+        (perf_counter() - started_at) * 1000,
     )
 
     return {
@@ -370,13 +607,15 @@ def search_summary_chunks_for_documents(
     user_id: str,
     document_ids: list[str],
     query: str,
-    seed_k: int = 5,
-    per_query_k: int = 10,
-    per_query_keep: int = 4,
-    context_k: int = 12,
+    seed_k: int = SUMMARY_SEED_K,
+    per_query_k: int = SUMMARY_SUBQUERY_RETRIEVE_K,
+    per_query_keep: int = SUMMARY_SUBQUERY_KEEP_K,
+    context_k: int = SUMMARY_CONTEXT_K,
     index_generations: dict[str, str | None] | None = None,
     original_query: str | None = None,
+    overview: bool = False,
 ) -> dict:
+    started_at = perf_counter()
     if seed_k <= 0:
         raise ValueError("seed_k must be greater than 0")
     if per_query_k <= 0:
@@ -386,10 +625,7 @@ def search_summary_chunks_for_documents(
     if context_k <= 0:
         raise ValueError("context_k must be greater than 0")
 
-    if (
-        is_knowledge_base_overview_query(original_query or "")
-        or is_knowledge_base_overview_query(query)
-    ):
+    if overview:
         return search_knowledge_base_overview_chunks(
             user_id,
             document_ids,
@@ -398,31 +634,50 @@ def search_summary_chunks_for_documents(
             index_generations=index_generations,
         )
 
-    seed_candidates = retrieve_candidate_chunks_for_documents(
-        user_id,
-        document_ids,
+    base_queries = _normalize_retrieval_queries([
+        original_query or query,
         query,
-        max(seed_k * 3, per_query_k),
-        index_generations,
-    )
-    if not seed_candidates:
-        return {
-            "sources": [],
-            "retrieval_queries": [query],
-        }
+    ])
+    merged_chunks = {}
+    for base_query in base_queries:
+        seed_candidates = retrieve_candidate_chunks_for_documents(
+            user_id,
+            document_ids,
+            base_query,
+            max(seed_k * 3, per_query_k),
+            index_generations,
+        )
+        if not seed_candidates:
+            continue
+        seed_sources = filter_relevant_evidence(
+            rerank_chunks(
+                base_query,
+                seed_candidates,
+                min(seed_k, len(seed_candidates)),
+            )
+        )
+        merge_candidate_chunks(
+            merged_chunks,
+            seed_sources,
+            base_query,
+        )
 
-    seed_sources = rerank_chunks(
-        query,
-        seed_candidates,
-        min(seed_k, len(seed_candidates)),
+    seed_sources = (
+        select_query_covered_chunks(
+            list(merged_chunks.values()),
+            base_queries,
+            seed_k,
+        )
+        if merged_chunks
+        else []
     )
     subqueries = build_summary_subqueries(query, seed_sources)
-    retrieval_queries = list(dict.fromkeys([query, *subqueries]))
+    retrieval_queries = _normalize_retrieval_queries([
+        *base_queries,
+        *subqueries,
+    ])
 
-    merged_chunks = {}
-    merge_candidate_chunks(merged_chunks, seed_sources, query)
-
-    for retrieval_query in retrieval_queries[1:]:
+    for retrieval_query in retrieval_queries[len(base_queries):]:
         candidates = retrieve_candidate_chunks_for_documents(
             user_id,
             document_ids,
@@ -433,10 +688,12 @@ def search_summary_chunks_for_documents(
         if not candidates:
             continue
 
-        ranked_candidates = rerank_chunks(
-            retrieval_query,
-            candidates,
-            min(per_query_keep, len(candidates)),
+        ranked_candidates = filter_relevant_evidence(
+            rerank_chunks(
+                retrieval_query,
+                candidates,
+                min(per_query_keep, len(candidates)),
+            )
         )
         merge_candidate_chunks(
             merged_chunks,
@@ -444,25 +701,25 @@ def search_summary_chunks_for_documents(
             retrieval_query,
         )
 
-    ranked_chunks = rerank_chunks(
-        query,
+    sources = select_query_covered_chunks(
         list(merged_chunks.values()),
-        len(merged_chunks),
+        retrieval_queries,
+        context_k,
     )
-    ranked_chunks = filter_relevant_evidence(ranked_chunks)
+    logger.info(
+        "summary_retrieval_completed document_count=%s subquery_count=%s "
+        "summary_retrieve_count=%s summary_final_context_count=%s "
+        "total_ms=%.2f",
+        len(document_ids),
+        len(retrieval_queries),
+        len(merged_chunks),
+        len(sources),
+        (perf_counter() - started_at) * 1000,
+    )
     return {
-        "sources": select_diverse_chunks(ranked_chunks, context_k),
+        "sources": sources,
         "retrieval_queries": retrieval_queries,
     }
-
-
-def is_knowledge_base_overview_query(query: str) -> bool:
-    """Identify requests that need representative evidence from every document."""
-    normalized_query = " ".join(query.lower().split())
-    return any(
-        phrase in normalized_query
-        for phrase in KNOWLEDGE_BASE_OVERVIEW_PHRASES
-    )
 
 
 def search_knowledge_base_overview_chunks(
@@ -602,6 +859,17 @@ def merge_candidate_chunks(
         if matched_query not in existing["matched_queries"]:
             existing["matched_queries"].append(matched_query)
 
+        candidate_score = candidate.get("rerank_score")
+        existing_score = existing.get("rerank_score")
+        if (
+            candidate_score is not None
+            and (
+                existing_score is None
+                or candidate_score > existing_score
+            )
+        ):
+            existing["rerank_score"] = candidate_score
+
         candidate_distance = candidate.get("距离")
         existing_distance = existing.get("距离")
         if (
@@ -612,6 +880,89 @@ def merge_candidate_chunks(
             )
         ):
             existing["距离"] = candidate_distance
+
+
+def select_query_covered_chunks(
+    chunks: list[dict],
+    retrieval_queries: list[str],
+    limit: int,
+    max_chunks_per_page: int = 2,
+) -> list[dict]:
+    """Select evidence by query coverage before filling by local score."""
+    if limit <= 0:
+        raise ValueError("limit 必须大于 0")
+
+    ranked_chunks = sorted(
+        chunks,
+        key=lambda chunk: (
+            len(chunk.get("matched_queries", [])),
+            chunk.get("rerank_score", float("-inf")),
+        ),
+        reverse=True,
+    )
+    selected = []
+    selected_keys = set()
+    page_counts = {}
+
+    def add_chunk(
+        chunk: dict,
+        *,
+        enforce_page_limit: bool = True,
+    ) -> bool:
+        metadata = chunk.get("元数据", {})
+        chunk_key = (
+            metadata.get("document_id"),
+            metadata.get("chunk_index"),
+            chunk.get("文本块") if metadata.get("chunk_index") is None else None,
+        )
+        page_key = (
+            metadata.get("document_id"),
+            metadata.get("page_number"),
+        )
+        if chunk_key in selected_keys:
+            return False
+        if (
+            enforce_page_limit
+            and page_counts.get(page_key, 0) >= max_chunks_per_page
+        ):
+            return False
+        selected.append(chunk)
+        selected_keys.add(chunk_key)
+        page_counts[page_key] = page_counts.get(page_key, 0) + 1
+        return True
+
+    query_buckets = {
+        query: sorted(
+            [
+                chunk
+                for chunk in chunks
+                if query in chunk.get("matched_queries", [])
+            ],
+            key=lambda chunk: chunk.get(
+                "rerank_score",
+                float("-inf"),
+            ),
+            reverse=True,
+        )
+        for query in retrieval_queries
+    }
+    for query in retrieval_queries:
+        if len(selected) >= limit:
+            break
+        if any(
+            query in chunk.get("matched_queries", [])
+            for chunk in selected
+        ):
+            continue
+        for chunk in query_buckets.get(query, []):
+            if add_chunk(chunk, enforce_page_limit=False):
+                break
+
+    for chunk in ranked_chunks:
+        if len(selected) >= limit:
+            break
+        add_chunk(chunk)
+    return selected
 
 
 def select_diverse_chunks(

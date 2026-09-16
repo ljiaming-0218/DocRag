@@ -1,9 +1,14 @@
 
 import re
+import logging
 from pathlib import Path
+from time import perf_counter
 
 from services.language_service import detect_text_language
 from services.llm_service import generate_answer
+
+
+logger = logging.getLogger(__name__)
 
 UNRESOLVED_REFERENCE_PATTERNS = (
     r"它",
@@ -22,6 +27,17 @@ UNRESOLVED_REFERENCE_PATTERNS = (
     r"\bthese tasks\b",
     r"\bthose tasks\b",
     r"\bthe other variant\b",
+)
+CRITICAL_ENTITY_PATTERN = re.compile(
+    r"\b(?:[A-Z]{2,}(?:[-_.][A-Z0-9]+)*|"
+    r"[A-Z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*|"
+    r"[A-Za-z][A-Za-z0-9_-]*@[0-9]+|"
+    r"\d+(?:\.\d+)?(?:[BMK]|%)?)\b|"
+    r"(?:(?i:Table|Figure|Fig\.?)|表|图)\s*\d+"
+)
+CRITICAL_PHRASE_PATTERN = re.compile(
+    r"\b(?:full[ -]fine[ -]tuning|fine[ -]tuning)\b|全量微调",
+    flags=re.IGNORECASE,
 )
 
 
@@ -77,6 +93,60 @@ def has_unresolved_reference(text: str) -> bool:
     )
 
 
+def extract_critical_entities(
+    history: list[dict],
+    query: str,
+) -> list[str]:
+    """Extract explicit technical identifiers without asking an LLM."""
+    relevant_texts = [query]
+    recent_user_messages = [
+        message.get("content", "")
+        for message in history
+        if message.get("role") == "user"
+        and message.get("content")
+    ][-3:]
+    relevant_texts.extend(recent_user_messages)
+
+    entities = []
+    seen = set()
+    for match in CRITICAL_ENTITY_PATTERN.finditer("\n".join(relevant_texts)):
+        entity = match.group(0).strip()
+        normalized = entity.casefold()
+        if entity and normalized not in seen:
+            entities.append(entity)
+            seen.add(normalized)
+    for match in CRITICAL_PHRASE_PATTERN.finditer("\n".join(relevant_texts)):
+        entity = match.group(0).strip()
+        normalized = entity.casefold()
+        if normalized not in seen:
+            entities.append(entity)
+            seen.add(normalized)
+    return entities
+
+
+def preserve_critical_entities(
+    rewritten_query: str,
+    critical_entities: list[str],
+) -> str:
+    normalized_query = rewritten_query.casefold()
+    missing_entities = [
+        entity
+        for entity in critical_entities
+        if entity.casefold() not in normalized_query
+    ]
+    if not missing_entities:
+        return rewritten_query
+
+    logger.warning(
+        "query_rewrite_entities_restored missing_count=%s",
+        len(missing_entities),
+    )
+    return (
+        f"{rewritten_query.rstrip()} "
+        f"[Required entities: {', '.join(missing_entities)}]"
+    )
+
+
 def build_query_repair_prompt(
     history: list[dict],
     query: str,
@@ -111,6 +181,7 @@ def rewrite_query(
     query: str,
     target_language: str = "unknown",
 ) -> str:
+    started_at = perf_counter()
     query = query.strip()
     if not query:
         raise ValueError("query 不能为空")
@@ -126,6 +197,8 @@ def rewrite_query(
     if not history and not language_mismatch:
         return query
 
+    critical_entities = extract_critical_entities(history, query)
+
     try:
         prompt = build_query_rewrite_prompt(
             history,
@@ -133,8 +206,12 @@ def rewrite_query(
             target_language,
         )
         rewritten_query = generate_answer(prompt, operation="query_rewrite").strip()
-    except Exception as e:
-        print(f"Query rewrite failed: {e}")
+    except Exception as exc:
+        logger.warning(
+            "query_rewrite_failed error_type=%s query_rewrite_ms=%.2f",
+            type(exc).__name__,
+            (perf_counter() - started_at) * 1000,
+        )
         return query
 
     if not rewritten_query:
@@ -154,7 +231,22 @@ def rewrite_query(
             ).strip()
             if repaired_query:
                 rewritten_query = repaired_query
-        except Exception as e:
-            print(f"Query rewrite repair failed: {e}")
+        except Exception as exc:
+            logger.warning(
+                "query_rewrite_repair_failed error_type=%s",
+                type(exc).__name__,
+            )
 
+    rewritten_query = preserve_critical_entities(
+        rewritten_query,
+        critical_entities,
+    )
+    logger.info(
+        "query_rewrite_completed history_count=%s source_length=%s "
+        "result_length=%s query_rewrite_ms=%.2f",
+        len(history),
+        len(query),
+        len(rewritten_query),
+        (perf_counter() - started_at) * 1000,
+    )
     return rewritten_query

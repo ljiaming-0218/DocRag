@@ -283,6 +283,7 @@ def test_index_fingerprint_is_stable_and_config_sensitive():
     assert service.build_index_fingerprint(fixed_config) != (
         service.build_index_fingerprint(recursive_config)
     )
+    assert fixed_config["embedding_provider"] == service.PROVIDER_NAME
 
 
 @pytest.mark.asyncio

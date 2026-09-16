@@ -17,7 +17,7 @@ RUN useradd -m -u 1000 user
 WORKDIR /home/user/app
 
 RUN mkdir -p \
-        /home/user/app/runtime/chroma_db \
+        /home/user/app/runtime/chroma_bge_m3_api \
         /home/user/app/runtime/uploads \
     && chown -R user:user /home/user/app
 
@@ -27,11 +27,18 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 USER user
 
-RUN python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('BAAI/bge-small-zh-v1.5'); CrossEncoder('BAAI/bge-reranker-base')"
+RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('BAAI/bge-reranker-base')"
 
 ENV HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
-    CHROMA_DIR=/home/user/app/runtime/chroma_db \
+    EMBEDDING_PROVIDER=siliconflow \
+    EMBEDDING_MODEL=BAAI/bge-m3 \
+    EMBEDDING_API_BASE=https://api.siliconflow.cn/v1 \
+    EMBEDDING_DIMENSION=1024 \
+    EMBEDDING_BATCH_SIZE=32 \
+    EMBEDDING_TIMEOUT_SECONDS=60 \
+    EMBEDDING_MAX_RETRIES=2 \
+    CHROMA_DIR=/home/user/app/runtime/chroma_bge_m3_api \
     UPLOAD_DIR=/home/user/app/runtime/uploads \
     OCR_ENABLED=true \
     OCR_LANGUAGES=eng+chi_sim \

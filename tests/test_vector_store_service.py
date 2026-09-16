@@ -213,7 +213,8 @@ def test_save_chunks_writes_index_metadata(monkeypatch):
         "chunk_size": 500,
         "chunk_overlap": 50,
         "chunk_version": "recursive:v1",
-        "embedding_model": "BAAI/bge-small-zh-v1.5",
+        "embedding_provider": "siliconflow",
+        "embedding_model": "BAAI/bge-m3",
         "embedding_version": "v1",
         "index_version": "v1",
         "index_fingerprint": "fingerprint-1",
@@ -224,7 +225,8 @@ def test_save_chunks_writes_index_metadata(monkeypatch):
     metadata = collection.upsert_calls[0]["metadatas"][0]
     assert metadata["index_fingerprint"] == "fingerprint-1"
     assert metadata["chunk_version"] == "recursive:v1"
-    assert metadata["embedding_model"] == "BAAI/bge-small-zh-v1.5"
+    assert metadata["embedding_provider"] == "siliconflow"
+    assert metadata["embedding_model"] == "BAAI/bge-m3"
 
 
 def test_versioned_save_keeps_previous_generation(monkeypatch):

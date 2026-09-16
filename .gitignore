@@ -10,3 +10,4 @@ runtime/
 .pytest_cache/
 *.log
 tmp/
+eval/runs/
