@@ -184,6 +184,46 @@ async def test_prepare_ask_context_rejects_unready_single_document(
 
 
 @pytest.mark.asyncio
+async def test_prepare_ask_context_rejects_missing_active_generation(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        chat_service,
+        "find_conversation_by_id",
+        AsyncMock(return_value={
+            "_id": "conversation-1",
+            "user_id": "user-1",
+            "document_id": "document-1",
+            "kb_id": None,
+        }),
+    )
+    monkeypatch.setattr(
+        chat_service,
+        "get_existing_document_for_user",
+        AsyncMock(return_value={
+            "_id": "document-1",
+            "filename": "ocad217.pdf",
+            "processing_status": "completed",
+            "active_index_generation_id": "generation-new",
+        }),
+    )
+    has_chunks = Mock(return_value=False)
+    create_message = AsyncMock()
+    monkeypatch.setattr(chat_service, "has_chunks", has_chunks)
+    monkeypatch.setattr(chat_service, "create_message", create_message)
+
+    with pytest.raises(document_service.DocumentIndexUnavailableError):
+        await chat_service.prepare_ask_context(
+            "user-1", "conversation-1", "What is the model?"
+        )
+
+    has_chunks.assert_called_once_with(
+        "user-1", "document-1", "generation-new"
+    )
+    create_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_create_knowledge_base_conversation_saves_scope(monkeypatch):
     monkeypatch.setattr(
         conversation_service,
@@ -467,6 +507,21 @@ def test_prompt_context_identifies_source_document():
 
     assert "lora.pdf" in context
     assert "LoRA updates low-rank matrices" in context
+    assert "distance" not in context
+
+
+def test_collective_model_question_uses_document_coverage(monkeypatch):
+    from services import agent_router_service
+
+    llm = Mock()
+    monkeypatch.setattr(agent_router_service, "generate_answer", llm)
+    route = agent_router_service.route_task("他们都用了哪些模型？")
+
+    assert route == {
+        "task_type": "comparison",
+        "scope": "focused",
+    }
+    llm.assert_not_called()
 
 
 def test_create_conversation_api_accepts_knowledge_base_scope(monkeypatch):

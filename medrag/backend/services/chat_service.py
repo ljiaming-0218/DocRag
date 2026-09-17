@@ -4,6 +4,7 @@ from time import perf_counter
 
 from services.agent_router_service import route_task
 from services.document_service import (
+    DocumentIndexUnavailableError,
     ensure_document_ready,
     get_existing_document_for_user,
 )
@@ -33,6 +34,7 @@ from services.search_service import (
     search_summary_chunks_for_documents,
 )
 from services.user_service import ALLOWED_USER_TYPES, get_existing_user
+from services.vector_store_service import has_chunks
 from stores.conversation_store import find_conversation_by_id
 
 
@@ -149,6 +151,18 @@ async def prepare_ask_context(
                 "active_index_generation_id"
             )
         }
+    for document_id, generation_id in index_generations.items():
+        if generation_id and not await to_thread(
+            has_chunks, user_id, document_id, generation_id
+        ):
+            logger.warning(
+                "active_document_index_missing user_id=%s document_id=%s "
+                "generation_id=%s",
+                user_id,
+                document_id,
+                generation_id,
+            )
+            raise DocumentIndexUnavailableError(document_id)
     user = await get_existing_user(user_id)
 
     request_user_type = (

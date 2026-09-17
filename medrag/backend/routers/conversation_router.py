@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from api_errors import APIError
 from services.llm_service import LLMServiceError
-from services.document_service import DocumentNotReadyError
+from services.document_service import (
+    DocumentIndexUnavailableError,
+    DocumentNotReadyError,
+)
 from services.message_service import list_messages
 from services.conversation_service import create_conversation,list_conversations
 from services.chat_service import ask_conversation
@@ -129,6 +132,12 @@ async def ask_conversation_endpoint(
         )
     except APIError:
         raise
+    except DocumentIndexUnavailableError as error:
+        raise APIError(
+            status_code=409,
+            code="DOCUMENT_INDEX_UNAVAILABLE",
+            message=str(error),
+        ) from error
     except DocumentNotReadyError as error:
         raise APIError(
             status_code=409,

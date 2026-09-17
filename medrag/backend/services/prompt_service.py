@@ -128,9 +128,7 @@ def build_context(retrieved_chunks: list[dict]) -> str:
             or "unknown document"
         )
         context_parts.append(
-            f"[文档 {source_name}, 第{metadata['page_number']}页, "
-            f"distance {chunk['距离']}, "
-            f"chunk {metadata['chunk_index']}]\n"
+            f"[文档 {source_name}, 第{metadata['page_number']}页]\n"
             f"{chunk['文本块']}"
         )
 
@@ -141,10 +139,14 @@ def build_history_context(history: list[dict]) -> str:
     if not history:
         return "无历史对话"
 
-    return "\n".join(
-        f"{message['role']}: {message['content']}"
-        for message in history
-    )
+    lines = []
+    for message in history[-4:]:
+        if message.get("role") == "assistant" and not message.get("sources"):
+            continue
+        content = message.get("content", "").strip()
+        if content:
+            lines.append(f"{message['role']}: {content[:350]}")
+    return "\n".join(lines) if lines else "无历史对话"
 
 
 def build_user_type_instruction(user_type: str) -> str:

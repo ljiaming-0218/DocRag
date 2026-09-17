@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 UNRESOLVED_REFERENCE_PATTERNS = (
     r"它",
+    r"他们",
+    r"这些论文",
+    r"这些文档",
     r"该方法",
     r"这个方法",
     r"该模型",
@@ -51,9 +54,12 @@ def build_history_text(history: list[dict]) -> str:
         return "无历史对话"
 
     lines = []
-    for message in history:
+    for message in history[-4:]:
         role = message.get("role", "")
         content = message.get("content", "")
+
+        if role == "assistant" and not message.get("sources"):
+            continue
 
         if role == "user":
             role_name = "用户"
@@ -63,7 +69,7 @@ def build_history_text(history: list[dict]) -> str:
             role_name = role or "未知角色"
 
         if content:
-            lines.append(f"{role_name}: {content}")
+            lines.append(f"{role_name}: {content[:350]}")
 
     return "\n".join(lines) if lines else "无历史对话"
 
@@ -99,13 +105,14 @@ def extract_critical_entities(
 ) -> list[str]:
     """Extract explicit technical identifiers without asking an LLM."""
     relevant_texts = [query]
-    recent_user_messages = [
-        message.get("content", "")
-        for message in history
-        if message.get("role") == "user"
-        and message.get("content")
-    ][-3:]
-    relevant_texts.extend(recent_user_messages)
+    if has_unresolved_reference(query):
+        recent_user_messages = [
+            message.get("content", "")
+            for message in history
+            if message.get("role") == "user"
+            and message.get("content")
+        ]
+        relevant_texts.extend(recent_user_messages[-1:])
 
     entities = []
     seen = set()

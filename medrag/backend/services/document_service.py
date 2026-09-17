@@ -43,6 +43,17 @@ class DocumentNotReadyError(RuntimeError):
         self.processing_stage = processing_stage
 
 
+class DocumentIndexUnavailableError(RuntimeError):
+    """The active index generation is absent from this runtime's Chroma."""
+
+    def __init__(self, document_id: str) -> None:
+        super().__init__(
+            "当前文档的索引与运行环境不一致，请重新上传并建立索引，"
+            "或联系管理员检查索引配置"
+        )
+        self.document_id = document_id
+
+
 def get_document_processing_status(document: dict) -> str:
     processing_status = document.get("processing_status")
     if processing_status:

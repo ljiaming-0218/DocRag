@@ -60,9 +60,25 @@ def _route_scope_by_rules(query: str, task_type: str) -> str:
     return "focused"
 
 
+def is_collective_document_question(query: str) -> bool:
+    normalized_query = query.strip().lower()
+    return (
+        any(term in normalized_query for term in ("分别", "各自", "都"))
+        and any(term in normalized_query for term in ("模型", "方法", "任务"))
+        and any(term in normalized_query for term in ("哪些", "什么"))
+        and not any(
+            term in normalized_query
+            for term in ("比较", "对比", "区别", "差异")
+        )
+    )
+
+
 def route_task_by_rules(query: str) -> dict[str, str]:
     """Provide a deterministic fallback when the LLM router is unavailable."""
     normalized_query = query.strip().lower()
+
+    if is_collective_document_question(query):
+        return {"task_type": "comparison", "scope": "focused"}
 
     if any(keyword in normalized_query for keyword in ["阅读报告", "分析这篇文献"]):
         task_type = "report"
@@ -144,6 +160,8 @@ def route_task(query: str) -> dict[str, str]:
         raise ValueError("query 不能为空")
 
     fallback_route = route_task_by_rules(query)
+    if is_collective_document_question(query):
+        return fallback_route
     prompt = load_router_prompt_template().format(query=query)
     try:
         raw_result = generate_answer(prompt, operation="task_route")

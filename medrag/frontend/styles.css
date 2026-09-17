@@ -476,6 +476,25 @@ input[type="file"] {
   gap: 10px;
 }
 
+.upload-advanced {
+  margin-top: 12px;
+  color: var(--muted-light);
+}
+
+.upload-advanced summary {
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted-light);
+  font-weight: 500;
+}
+
+.upload-advanced p {
+  margin: 8px 0;
+  font-size: 12px;
+}
+
 .primary-button {
   width: 100%;
   border: 0;

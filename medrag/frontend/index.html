@@ -112,16 +112,20 @@
               <option value="">仅保存为个人文档</option>
             </select>
 
-            <div class="row">
-              <div>
-                <label for="chunkSize">chunk_size</label>
-                <input id="chunkSize" type="number" value="500" min="1" />
+            <details class="upload-advanced">
+              <summary>索引高级设置</summary>
+              <p>一般无需调整，系统会使用默认切片参数。</p>
+              <div class="row">
+                <div>
+                  <label for="chunkSize">文本块长度</label>
+                  <input id="chunkSize" type="number" value="500" min="1" />
+                </div>
+                <div>
+                  <label for="chunkOverlap">相邻文本块重叠长度</label>
+                  <input id="chunkOverlap" type="number" value="50" min="0" />
+                </div>
               </div>
-              <div>
-                <label for="chunkOverlap">chunk_overlap</label>
-                <input id="chunkOverlap" type="number" value="50" min="0" />
-              </div>
-            </div>
+            </details>
 
             <button id="indexButton" class="primary-button" type="button">建立 PDF 索引</button>
             <div id="uploadProgress" class="upload-progress hidden" aria-live="polite">
