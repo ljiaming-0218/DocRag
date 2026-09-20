@@ -7,6 +7,8 @@ rag_tests/chroma_data/
 medrag/backend/.venv/
 runtime/
 .env
+medrag/backend/env.hf.*
+*.secrets
 .pytest_cache/
 *.log
 tmp/

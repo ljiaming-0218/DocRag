@@ -1,5 +1,207 @@
 # AGENTS.md
 
+## 0. 当前权威状态与执行优先级（2026-09-21）
+
+本节优先级高于本文后续历史 Phase 说明。如果后续章节仍写有“当前只执行 Phase 1”或“当前仅为单文档 RAG”，一律以本节为准。
+
+### 0.1 当前项目定位
+
+当前 DocRAG 已经完成：
+
+```text
+多文档知识库
++ Fixed / Recursive Chunking
++ Index Fingerprint / Index Generation / Active Generation
++ Dense + BM25 + RRF + CrossEncoder Rerank
++ Evidence Threshold
++ Query Rewrite
++ Summary Multi-Query
++ JWT / Argon2 / 用户资源归属校验
++ Conversation / Message / Sources 持久化
++ Agent Router（LLM 判断 + 规则回退）
++ 离线 Retrieval / Generation Evaluation
+```
+
+项目已经超过普通 RAG Demo，但暂时不能描述为：
+
+```text
+企业级高并发知识库
+完整多模态文档理解平台
+完整 Agent 工具编排平台
+高精度 RAG 系统
+```
+
+这些结论必须由容量、稳定性、效果和生产运行证据支撑。
+
+### 0.2 当前主要缺口
+
+当前最大问题不是继续增加功能，而是建立可信证据和生产闭环：
+
+```text
+发布版本一致性
+效果评估可信度
+异步索引可靠性
+复杂文档结构解析
+真实集成测试
+请求级可观测性
+容量与并发基准
+```
+
+### 0.3 当前开发路线
+
+严格按以下顺序推进：
+
+#### Stage A：Release Integrity
+
+目标：保证本地、GitHub、Hugging Face 和 README 描述一致。
+
+必须完成：
+
+```text
+清理或忽略部署 Secret 文件
+README 与当前 Router / Provider / Retrieval 实现一致
+暴露 build commit SHA 或版本号
+确认本地与线上使用明确隔离的数据环境
+建立最小 CI：pytest + compileall + diff check
+```
+
+#### Stage B：Evaluation Closure
+
+目标：用固定数据集证明 Retrieval 和 Generation 效果，而不是只展示成功样例。
+
+数据集至少覆盖：
+
+```text
+Fact
+Term
+Summary
+Comparison
+Follow-up
+No-answer
+Multi-document
+Source-check
+```
+
+固定其他变量，对比：
+
+```text
+Dense
+Dense + Rerank
+Hybrid + RRF + Rerank
+```
+
+必须报告：
+
+```text
+Recall@3 / Recall@5 / Recall@15
+MRR
+nDCG
+No-answer False Positive Rate
+Citation Accuracy
+Faithfulness
+Answer Completeness
+P50 / P95 Latency
+```
+
+不得因为指标低而放宽 gold evidence。必须先检查 gold evidence、候选召回、Rerank 前后排名和阈值过滤。
+
+#### Stage C：Durable Ingestion
+
+目标：把长时间 PDF 索引从同步 HTTP 请求升级为可恢复任务。
+
+推荐最小方案：
+
+```text
+POST document -> 202 + job_id
+MongoDB 持久化 job 状态
+独立 worker 执行 parse / chunk / embed / index
+GET job status
+失败重试、幂等和错误阶段记录
+```
+
+当前不为了“企业级”盲目引入 Kafka 或复杂微服务；单 worker + MongoDB Job Collection 足够作为第一版。
+
+#### Stage D：Document Parsing Quality
+
+目标：从纯文本 PDF 解析逐步升级为结构感知解析。
+
+优先处理：
+
+```text
+Heading / Section
+Table
+Figure Caption
+Header / Footer Noise
+OCR Quality
+Layout Metadata
+```
+
+不要继续无依据增加切片策略。先建立解析质量样本和结构字段，再比较检索收益。
+
+#### Stage E：Observability and Capacity
+
+关键日志与指标至少包括：
+
+```text
+request_id
+user_id / kb_id / document_id / conversation_id
+parse / chunk / embedding / retrieval / rerank / llm latency
+candidate_count / evidence_count
+provider / model / index fingerprint
+token usage / error_code / error_stage
+```
+
+完成 10K / 100K / 500K chunks 基准后，才能依据瓶颈决定是否从 Chroma 迁移 Qdrant 或 Milvus。
+
+### 0.4 当前禁止事项
+
+当前不要主动增加：
+
+```text
+GraphRAG
+Multi-Agent
+长期 Agent Memory
+仅为使用框架而重写 LangChain / LangGraph
+未经 Benchmark 的 Qdrant / Milvus 迁移
+与核心质量无关的前端大改
+Kafka / Kubernetes / 微服务拆分
+```
+
+### 0.5 当前质量基线规则
+
+历史审计曾记录 `240 passed, 6 warnings`，但该数字不是永久有效事实。每次需要对外声明测试数量前，必须在当前 commit 重新运行并记录结果。
+
+用户当前要求：
+
+> 只有用户明确要求执行 pytest 时，Codex 才运行 pytest。
+
+未获明确要求时，可以进行只读检查、`compileall`、静态分析和 `git diff --check`，但必须明确说明这些不能替代测试。
+
+### 0.6 当前 Definition of Done
+
+普通任务完成至少满足：
+
+```text
+修改范围与任务一致
+没有覆盖用户未提交修改
+接口和数据结构兼容性已检查
+配置和 README 在必要时同步
+给出可复现验证命令
+明确未执行的测试与剩余风险
+```
+
+阶段性升级完成还必须满足：
+
+```text
+固定输入与环境
+Before / After 指标
+逐题 Bad Case
+延迟与成本变化
+Regression 结论
+```
+
+---
+
 ## 1. 项目身份
 
 本项目名称为 **DocRAG / MedRAG V2**。

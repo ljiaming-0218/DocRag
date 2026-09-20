@@ -62,7 +62,7 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 - 先扩大向量候选池，再使用 `BAAI/bge-reranker-base` 对 `query + chunk` 重排。
 - 保存并展示回答对应的 sources，包括页码、chunk 和检索分数。
 - 检索无证据时直接拒答，不调用 LLM 基于参数知识补充答案。
-- 对 OpenRouter/OpenAI-compatible API 的超时、限流、连接失败和异常状态进行分类处理。
+- Rewrite 与 Answer 使用两套可独立配置的 OpenAI-compatible LLM Client，并对超时、限流、连接失败和异常状态进行分类处理。
 
 ### 知识库与多文档问答
 
@@ -88,7 +88,7 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 
 ### 任务路由
 
-当前使用轻量规则 Router：
+当前使用“LLM 判断 + 规则回退”的轻量 Router。LLM Router 输出结构化任务类型；调用失败、返回非法结果或置信度不足时，使用确定性规则兜底：
 
 - 包含“总结、摘要、概括、归纳”时进入 `summary`。
 - 包含“阅读报告、分析这篇文献”时进入 `report`。
@@ -139,7 +139,7 @@ flowchart LR
     AGENT --> RETRIEVE[向量召回 + Rerank]
     CHROMA --> RETRIEVE
     RETRIEVE --> PROMPT[任务 Prompt]
-    PROMPT --> LLM[OpenRouter LLM]
+    PROMPT --> LLM[OpenAI-compatible LLM]
     LLM --> CHAT
     CHAT --> UI
 ```
@@ -161,7 +161,7 @@ flowchart LR
 | Reranker | CrossEncoder、`BAAI/bge-reranker-base` |
 | 向量数据库 | Chroma |
 | 业务数据 | MongoDB、PyMongo Async API |
-| 大模型 | OpenRouter / OpenAI-compatible API |
+| 大模型 | Rewrite / Answer 双角色 OpenAI-compatible API |
 | 前端 | HTML、CSS、JavaScript |
 | 测试与评估 | pytest、pytest-asyncio、Playwright、自建 RAG 小型评估集 |
 | 部署 | Docker、Hugging Face Space |
@@ -289,6 +289,9 @@ copy .env.example .env
 配置示例：
 
 ```env
+APP_VERSION=dev
+BUILD_COMMIT=unknown
+
 REWRITE_LLM_PROVIDER=modelscope
 REWRITE_LLM_API_KEY=your_rewrite_key
 REWRITE_LLM_BASE_URL=https://api-inference.modelscope.cn/v1
@@ -338,7 +341,7 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8000
 
 - 前端：<http://127.0.0.1:8000/>
 - Swagger：<http://127.0.0.1:8000/docs>
-- 健康检查：<http://127.0.0.1:8000/health>
+- 健康检查：<http://127.0.0.1:8000/health>（包含应用版本和构建提交号）
 - 就绪检查：<http://127.0.0.1:8000/ready>
 
 模型已缓存且 Hugging Face 网络不可用时，可在启动前设置：
@@ -352,7 +355,7 @@ set TRANSFORMERS_OFFLINE=1
 
 | 方法与路径 | 功能 |
 | --- | --- |
-| `GET /health` | 服务存活检查 |
+| `GET /health` | 服务存活检查，并返回 `version` 与 `build_commit` |
 | `GET /ready` | 检查数据库等关键依赖是否就绪 |
 | `POST /auth/register` | 注册用户并返回 JWT |
 | `POST /auth/login` | 校验用户名和密码并返回 JWT |

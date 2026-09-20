@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: medrag/backend
+      CHROMA_DIR: ${{ github.workspace }}/runtime/chroma
+      UPLOAD_DIR: ${{ github.workspace }}/runtime/uploads
+      MONGODB_URI: mongodb://127.0.0.1:27017
+      MONGODB_DB_NAME: medrag_test
+      REWRITE_LLM_API_KEY: ci-placeholder
+      REWRITE_LLM_BASE_URL: https://example.invalid/v1
+      REWRITE_LLM_MODEL: ci-placeholder
+      ANSWER_LLM_API_KEY: ci-placeholder
+      ANSWER_LLM_BASE_URL: https://example.invalid/v1
+      ANSWER_LLM_MODEL: ci-placeholder
+      EMBEDDING_API_KEY: ci-placeholder
+      JWT_SECRET_KEY: ci-only-secret-key-that-is-not-used-outside-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            medrag/backend/requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r medrag/backend/requirements.txt -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Compile Python sources
+        run: python -m compileall -q medrag/backend tests eval
+
+      - name: Run tests
+        run: python -m pytest -q

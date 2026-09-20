@@ -19,7 +19,7 @@ from stores.conversation_store import create_conversation_indexes
 from stores.document_store import create_document_indexes
 from stores.knowledge_base_store import create_knowledge_base_indexes
 
-from config import FRONTEND_DIR
+from config import APP_VERSION, BUILD_COMMIT, FRONTEND_DIR
 
 from routers.user_router import router as user_router
 from routers.conversation_router import router as conversation_router
@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="DocRAG Agent PDF 文献阅读助手",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -77,6 +78,8 @@ def health_check() -> dict:
     return {
         "status": "ok",
         "service": "docrag",
+        "version": APP_VERSION,
+        "build_commit": BUILD_COMMIT,
     }
 
 @app.get("/ready")
