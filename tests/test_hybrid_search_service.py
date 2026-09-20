@@ -354,7 +354,10 @@ def test_summary_uses_original_query_when_rewrite_has_no_candidates(
         original_query="原始总结问题",
     )
 
-    assert result["sources"] == [original_candidate]
+    assert result["sources"] == [{
+        **original_candidate,
+        "matched_queries": ["原始总结问题"],
+    }]
     assert result["retrieval_queries"] == [
         "原始总结问题",
         "rewritten summary query",

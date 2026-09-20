@@ -345,7 +345,7 @@ async def test_prepare_ask_context_uses_multi_document_search(monkeypatch):
     multi_search = Mock(return_value=[source])
     monkeypatch.setattr(
         chat_service,
-        "search_relevant_chunks_for_documents",
+        "search_relevant_chunks_for_document_queries",
         multi_search,
     )
     monkeypatch.setattr(
@@ -367,7 +367,7 @@ async def test_prepare_ask_context_uses_multi_document_search(monkeypatch):
     multi_search.assert_called_once_with(
         "user-1",
         ["document-1", "document-2"],
-        "What is RAG?",
+        ["What is RAG?"],
         3,
         {"document-1": None, "document-2": None},
     )

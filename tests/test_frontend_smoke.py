@@ -13,6 +13,13 @@ EDGE_PATH = Path(
 )
 
 
+def launch_browser(playwright):
+    launch_options = {"headless": True}
+    if EDGE_PATH.exists():
+        launch_options["executable_path"] = str(EDGE_PATH)
+    return playwright.chromium.launch(**launch_options)
+
+
 class QuietHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         return
@@ -44,8 +51,6 @@ def json_response(route: Route, data, status: int = 200):
 
 
 def test_frontend_complete_smoke(tmp_path: Path):
-    assert EDGE_PATH.exists(), "本机未找到 Microsoft Edge"
-
     errors = []
     index_calls = 0
     document = {
@@ -117,10 +122,7 @@ def test_frontend_complete_smoke(tmp_path: Path):
         return route.continue_()
 
     with frontend_server() as base_url, sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            executable_path=str(EDGE_PATH),
-            headless=True,
-        )
+        browser = launch_browser(playwright)
         page = browser.new_page()
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.on(
@@ -161,8 +163,6 @@ def test_frontend_complete_smoke(tmp_path: Path):
 
 
 def test_frontend_knowledge_base_smoke(tmp_path: Path):
-    assert EDGE_PATH.exists(), "Microsoft Edge is required"
-
     errors = []
     knowledge_base_created = False
     document_linked = False
@@ -287,10 +287,7 @@ def test_frontend_knowledge_base_smoke(tmp_path: Path):
         return route.continue_()
 
     with frontend_server() as base_url, sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            executable_path=str(EDGE_PATH),
-            headless=True,
-        )
+        browser = launch_browser(playwright)
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.on(
@@ -354,8 +351,6 @@ def test_frontend_knowledge_base_smoke(tmp_path: Path):
 
 
 def test_frontend_user_switch_clears_draft_and_error_state():
-    assert EDGE_PATH.exists(), "Microsoft Edge is required"
-
     errors = []
 
     def handle(route: Route):
@@ -383,10 +378,7 @@ def test_frontend_user_switch_clears_draft_and_error_state():
         return route.continue_()
 
     with frontend_server() as base_url, sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            executable_path=str(EDGE_PATH),
-            headless=True,
-        )
+        browser = launch_browser(playwright)
         page = browser.new_page()
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(base_url, wait_until="networkidle")
@@ -422,8 +414,6 @@ def test_frontend_user_switch_clears_draft_and_error_state():
 
 
 def test_frontend_multi_pdf_upload_is_sequential(tmp_path: Path):
-    assert EDGE_PATH.exists(), "Microsoft Edge is required"
-
     errors = []
     index_calls = 0
     conversation_creations = 0
@@ -480,10 +470,7 @@ def test_frontend_multi_pdf_upload_is_sequential(tmp_path: Path):
         return route.continue_()
 
     with frontend_server() as base_url, sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            executable_path=str(EDGE_PATH),
-            headless=True,
-        )
+        browser = launch_browser(playwright)
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.on(
