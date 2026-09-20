@@ -20,6 +20,7 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 - Hugging Face Space：<https://maoxiao-1205-medrag.hf.space/>
 - 免费实例可能休眠，首次访问需要等待模型和服务启动。
 - 演示环境受免费实例资源和本地磁盘持久性限制，请勿上传敏感文件。
+- 可通过 `/health` 返回的 `build_commit` 与 GitHub commit 对比，确认线上运行的具体版本。
 
 ## 项目预览
 
@@ -325,6 +326,15 @@ MAX_UPLOAD_SIZE_MB=20
 
 API Key 只能放在后端环境变量中。`.env`、上传文件、Chroma 数据和日志均不得提交到 Git。
 
+本地与线上必须使用不同的 MongoDB 数据库名和独立的 Chroma 目录。例如：
+
+```text
+Local: MONGODB_DB_NAME=medrag_local
+HF:    MONGODB_DB_NAME=medrag_hf
+```
+
+MongoDB 元数据中的 active generation 只对创建它的向量存储有效。不同运行环境共享 MongoDB、但不共享 Chroma 时，会造成“文档显示已完成但本地没有对应向量”的状态冲突。
+
 LLM 层按职责使用两套 OpenAI-compatible 配置：`REWRITE_LLM_*` 负责
 Query Rewrite 和 Summary Query，`ANSWER_LLM_*` 负责最终回答、总结、报告、
 术语解释和来源核查。两套配置可以使用不同供应商，也可以暂时使用同一供应商。
@@ -377,6 +387,32 @@ set TRANSFORMERS_OFFLINE=1
 | `POST /conversations/{id}/ask` | 执行多轮 Query Rewrite、检索和回答 |
 
 请求与响应的完整字段以 Swagger 为准。
+
+## 发布版本核验
+
+发布前先取得当前 GitHub 提交号：
+
+```cmd
+git rev-parse HEAD
+```
+
+在 Hugging Face Space 的 Settings 中配置普通 Variables：
+
+```text
+APP_VERSION=当前发布版本
+BUILD_COMMIT=上一步得到的完整 Git SHA
+MONGODB_DB_NAME=medrag_hf
+CHROMA_DIR=/home/user/app/runtime/chroma_bge_m3_api
+UPLOAD_DIR=/home/user/app/runtime/uploads
+```
+
+`BUILD_COMMIT` 不是密钥，应放 Variables；API Key、MongoDB URI 和 JWT Secret 必须放 Secrets。Docker Space 会把 Variables 同时提供给构建阶段和运行时。部署完成后访问：
+
+```text
+https://maoxiao-1205-medrag.hf.space/health
+```
+
+只有 `build_commit` 与准备发布的 Git SHA 一致，才能认为线上同步完成。由于免费 Space 的本地磁盘可能在重建或休眠后丢失，线上文档应在独立数据库中记录，并在索引缺失时重新上传或重建，不能与本地 Chroma 共用 active generation 元数据。
 
 ## 自动化测试
 

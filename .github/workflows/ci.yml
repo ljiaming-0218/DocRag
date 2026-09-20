@@ -29,9 +29,9 @@ jobs:
       JWT_SECRET_KEY: ci-only-secret-key-that-is-not-used-outside-tests
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -47,6 +47,10 @@ jobs:
 
       - name: Compile Python sources
         run: python -m compileall -q medrag/backend tests eval
+
+      - name: Prepare reranker model cache
+        run: |
+          python -c "from sentence_transformers import CrossEncoder; CrossEncoder('BAAI/bge-reranker-base')"
 
       - name: Run tests
         run: python -m pytest -q

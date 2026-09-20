@@ -1,9 +1,18 @@
 FROM python:3.11-slim
 
+ARG APP_VERSION=dev
+ARG BUILD_COMMIT=unknown
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    HF_HOME=/home/user/.cache/huggingface
+    HF_HOME=/home/user/.cache/huggingface \
+    APP_VERSION=${APP_VERSION} \
+    BUILD_COMMIT=${BUILD_COMMIT}
+
+LABEL org.opencontainers.image.title="DocRAG Agent" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

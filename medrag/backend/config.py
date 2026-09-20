@@ -10,7 +10,6 @@ load_dotenv(BASE_DIR / ".env", override=True)
 APP_VERSION = environ.get("APP_VERSION", "dev").strip() or "dev"
 BUILD_COMMIT = (
     environ.get("BUILD_COMMIT", "").strip()
-    or environ.get("SPACE_REVISION", "").strip()
     or "unknown"
 )
 
