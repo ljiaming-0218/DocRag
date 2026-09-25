@@ -4,7 +4,8 @@
 
 ## Stage B Closure（正式基线）
 
-Stage B 于 2026-09-26 收口。正式评估基线为
+Stage B 于 2026-09-26 收口。冻结代码 commit：
+`358ee89b262e42616e8fd9097db86ff51ebd4b17`。正式评估基线为
 `generation-single_turn-20260925T050759588111Z`（20/20 Generation）与
 `judge-20260925T055551281478Z` 加 `judge-20260925T065944162831Z`
 （补跑 RAG-03 后 Judge 20/20）。人工参与复核记录：
@@ -13,8 +14,10 @@ Stage B 于 2026-09-26 收口。正式评估基线为
 
 Generation 原始请求/答案结果不因后续指标审计而重写。最终拒答指标使用
 `correct_refusal_without_sources_v1` 口径；其离线拒答检测器在评估后有小幅
-修正，不改变 Generation、Retrieval 或 Prompt。该 run 的冻结源码快照与
-Stage B 冻结 commit 的对应关系记录在 closure manifest。
+修正，不改变 Generation、Retrieval 或 Prompt。归档源码快照的 HEAD 是
+`453e57296a89c178d5b887e17a71a0a5dcdbb407` 且当时工作区有改动。冻结 commit
+保留归档源码，并包含评估后拒答指标检测器/测试差异及阶段文档更新；该离线
+改动不改变 Generation 与 Retrieval 运行链路。完整对应关系记录在 closure manifest。
 
 另有最新 run 18/20 出现偶发本地后端 HTTP 500，根因尚未定位。此为
 Reliability/工程稳定性阶段的非阻塞 Known Issue，不覆盖上述正式评估基线。

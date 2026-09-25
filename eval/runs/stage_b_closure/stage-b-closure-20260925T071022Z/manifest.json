@@ -1,0 +1,129 @@
+{
+  "closure_run_id": "stage-b-closure-20260925T071022Z",
+  "created_at": "2026-09-25T07:10:22.495746+00:00",
+  "generation_run_id": "generation-single_turn-20260925T050759588111Z",
+  "base_judge_run_id": "judge-20260925T055551281478Z",
+  "supplemental_judge_run_id": "judge-20260925T065944162831Z",
+  "dataset_fingerprint": "91df4e2974e49f30ca992599dd718256cc0841c55a3b02e8663646de12b1d37d",
+  "prompt_fingerprint": "8b0458a084e7004a56d343b56459ef93f14f20b081d544c6e8358b4d68f4f149",
+  "git_commit_at_generation": "453e57296a89c178d5b887e17a71a0a5dcdbb407",
+  "git_dirty_at_generation": true,
+  "git_head_at_snapshot": "453e57296a89c178d5b887e17a71a0a5dcdbb407",
+  "git_status_at_snapshot": [
+    " M AGENTS.md",
+    " M eval/README.md",
+    " M eval/core.py",
+    " M eval/dataset/README.md",
+    " M eval/dataset/follow_up.json",
+    " M eval/dataset/single_turn.json",
+    " M eval/judges/llm_judge.py",
+    " M eval/metrics/generation.py",
+    " M eval/metrics/retrieval.py",
+    " M eval/runners/generation.py",
+    " M eval/runners/judge.py",
+    " M eval/runners/retrieval.py",
+    " M eval/runners/summary_retrieval.py",
+    " M eval/tools/validate_dataset.py",
+    " M medrag/backend/routers/conversation_router.py",
+    " M medrag/backend/services/chat_service.py",
+    " M medrag/backend/services/llm_service.py",
+    " M medrag/backend/services/search_service.py",
+    " M medrag/backend/services/summary_query_service.py",
+    " M tests/test_generation_eval.py",
+    " M tests/test_hybrid_search_service.py",
+    " M tests/test_llm_judge.py",
+    " M tests/test_llm_service.py",
+    " M tests/test_retrieval_eval.py",
+    "?? eval/tools/audit_dataset_coverage.py",
+    "?? tests/test_eval_dataset_coverage.py",
+    "?? tests/test_summary_retrieval_eval.py"
+  ],
+  "generation_timeout_seconds": 300.0,
+  "prompt_files": [
+    "comparison_prompt.txt",
+    "qa_prompt.txt",
+    "query_rewrite_prompt.txt",
+    "report_prompt.txt",
+    "source_check_prompt.txt",
+    "summary_prompt.txt",
+    "summary_query_prompt.txt",
+    "task_router_prompt.txt",
+    "term_prompt.txt"
+  ],
+  "runtime_snapshot_at_generation": {
+    "source": "local_backend_config",
+    "code": {
+      "git_commit": "453e57296a89c178d5b887e17a71a0a5dcdbb407",
+      "git_dirty": true
+    },
+    "retrieval_mode": "hybrid",
+    "embedding": {
+      "provider": "siliconflow",
+      "model": "BAAI/bge-m3"
+    },
+    "reranker": {
+      "model": "BAAI/bge-reranker-base",
+      "evidence_threshold": 0.05
+    },
+    "rewrite_llm": {
+      "provider": "modelscope",
+      "model": "Qwen/Qwen3.5-35B-A3B"
+    },
+    "answer_llm": {
+      "provider": "modelscope",
+      "model": "Qwen/Qwen3.5-35B-A3B"
+    },
+    "prompt_fingerprint": "8b0458a084e7004a56d343b56459ef93f14f20b081d544c6e8358b4d68f4f149",
+    "prompt_files": [
+      "comparison_prompt.txt",
+      "qa_prompt.txt",
+      "query_rewrite_prompt.txt",
+      "report_prompt.txt",
+      "source_check_prompt.txt",
+      "summary_prompt.txt",
+      "summary_query_prompt.txt",
+      "task_router_prompt.txt",
+      "term_prompt.txt"
+    ]
+  },
+  "generation_config": {
+    "suite": "single_turn",
+    "case_ids": null,
+    "base_url": "http://127.0.0.1:8000",
+    "username": "docrag-generation-eval",
+    "chunk_size": 500,
+    "chunk_overlap": 50,
+    "chunk_strategy": "recursive",
+    "history_limit": 6,
+    "n_results": 3,
+    "user_type": "general",
+    "timeout": 300.0,
+    "request_interval": 30.0
+  },
+  "judge_model": {
+    "provider": "modelscope",
+    "model": "Qwen/Qwen3.5-35B-A3B"
+  },
+  "score_adjustment_policy": "correct_refusal_without_sources_v1; original scores are retained per case as raw_scores",
+  "final_refusal_metric_after_detector_update": 1.0,
+  "final_no_answer_false_positive_rate": 0.0,
+  "stage_b_status": "CLOSED",
+  "next_stage": "Stage C: Durable Ingestion",
+  "manual_review_file": "eval/manual_review_v2.json",
+  "manual_review_status": "completed_with_user_participation_and_ai_assistance",
+  "known_issue": "A later, non-baseline run had intermittent local backend HTTP 500 failures (18/20); root cause remains unknown and is deferred to the Reliability/engineering stability stage.",
+  "limitations": [
+    "generation ran with a dirty tree; the archived source snapshot is retained and the frozen commit relationship is recorded below",
+    "Judge response raw text was not saved, so the supplemental RAG-03 success does not prove the parser can repair the exact prior malformed response",
+    "the refusal detector and its regression test were adjusted after the archived snapshot; this changes offline refusal-metric classification only, not generation or retrieval runtime behavior"
+  ],
+  "evaluated_snapshot_to_frozen_commit": {
+    "snapshot_git_head": "453e57296a89c178d5b887e17a71a0a5dcdbb407",
+    "frozen_code_commit": "358ee89b262e42616e8fd9097db86ff51ebd4b17",
+    "closure_record_commit": null,
+    "relationship": "Frozen commit contains the archived evaluated source snapshot plus post-run updates to the offline refusal detector and its test, along with closure documentation. The metric adjustment is documented; Generation and Retrieval runtime behavior was not changed by this delta. The later 18/20 run is not substituted for the official 20/20 baseline."
+  },
+  "working_tree_patch_sha256": "37a0488e3582466212d4255055dca06a1484e0ddb6417449aff67994fde78c23",
+  "working_tree_snapshot_sha256": "000011a6087198b2b48288ecc7d8cc01d9a1839bc0e28592602b9a6cafbcd48d",
+  "dirty_file_count": 27
+}
