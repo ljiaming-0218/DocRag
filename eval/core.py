@@ -54,6 +54,29 @@ def dataset_fingerprint(*paths: Path) -> str:
     return digest.hexdigest()
 
 
+def case_document_keys(case: dict) -> list[str]:
+    """Return the ordered document scope declared by one evaluation case."""
+    document_key = case.get("document_key")
+    document_keys = case.get("document_keys")
+    if document_key and document_keys:
+        raise ValueError("case cannot define both document_key and document_keys")
+    if document_key:
+        return [document_key]
+    if not isinstance(document_keys, list) or not document_keys:
+        raise ValueError("case must define document_key or document_keys")
+
+    normalized = []
+    for key in document_keys:
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("document_keys must contain non-empty strings")
+        key = key.strip()
+        if key not in normalized:
+            normalized.append(key)
+    if len(normalized) < 2:
+        raise ValueError("document_keys must contain at least two documents")
+    return normalized
+
+
 class EvalApiClient:
     """Small API client shared by retrieval and generation evaluations."""
 
@@ -106,9 +129,15 @@ class EvalApiClient:
                 f"接口没有返回 JSON: {response.text[:500]}"
             ) from error
 
-    def check_ready(self) -> None:
+    def check_ready(self) -> dict:
+        status = {}
         for path in ("/health", "/ready"):
-            self.request_json("GET", path, timeout=10.0)
+            status[path.removeprefix("/")] = self.request_json(
+                "GET",
+                path,
+                timeout=10.0,
+            )
+        return status
 
     def authenticate(self, username: str, password: str) -> str:
         credentials = {"username": username, "password": password}
@@ -180,19 +209,56 @@ class EvalApiClient:
     def create_conversation(
         self,
         user_id: str,
-        document_id: str,
         title: str,
+        *,
+        document_id: str | None = None,
+        kb_id: str | None = None,
+        selected_document_ids: list[str] | None = None,
     ) -> str:
+        body = {
+            "user_id": user_id,
+            "title": title,
+            "document_id": document_id,
+            "kb_id": kb_id,
+            "selected_document_ids": selected_document_ids,
+        }
         payload = self.request_json(
             "POST",
             "/conversations",
-            json={
-                "user_id": user_id,
-                "document_id": document_id,
-                "title": title,
-            },
+            json=body,
         )
         return payload["conversation_id"]
+
+    def create_knowledge_base(
+        self,
+        user_id: str,
+        name: str,
+        document_ids: list[str],
+    ) -> str:
+        payload = self.request_json(
+            "POST",
+            "/knowledge-bases",
+            json={
+                "user_id": user_id,
+                "name": name,
+                "description": "Frozen DocRAG evaluation scope",
+            },
+        )
+        kb_id = payload["kb_id"]
+        for document_id in document_ids:
+            self.request_json(
+                "POST",
+                f"/knowledge-bases/{kb_id}/documents/{document_id}",
+                json={"user_id": user_id},
+            )
+        return kb_id
+
+    def delete_knowledge_base(self, user_id: str, kb_id: str) -> None:
+        self.request_json(
+            "DELETE",
+            f"/knowledge-bases/{kb_id}",
+            params={"user_id": user_id},
+        )
 
     def ask(
         self,

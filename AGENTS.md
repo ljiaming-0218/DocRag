@@ -2,7 +2,7 @@
 
 ## 0. 当前权威状态与执行优先级（2026-09-21）
 
-本节优先级高于本文后续历史 Phase 说明。如果后续章节仍写有“当前只执行 Phase 1”或“当前仅为单文档 RAG”，一律以本节为准。
+本节优先级高于本文后续历史 Phase 说明。后续 Phase 1～5 内容仅保留为历史技术设计，不代表当前执行阶段。
 
 ### 0.1 当前项目定位
 
@@ -68,6 +68,21 @@ README 与当前 Router / Provider / Retrieval 实现一致
 #### Stage B：Evaluation Closure
 
 目标：用固定数据集证明 Retrieval 和 Generation 效果，而不是只展示成功样例。
+
+当前状态：
+
+```text
+Summary：评估链路完成，效果优化待续
+Generation：正式基线 20/20；Judge 补跑后 20/20
+人工参与复核：已记录于 `eval/manual_review_v2.json`
+Stage B：CLOSED
+Known Issue：最新 18/20 run 有偶发本地 HTTP 500，根因未定位，留待 Reliability 阶段处理；不覆盖正式基线
+→ Stage C：Durable Ingestion
+```
+
+Summary 实验结果保留在 `eval/runs/summary_retrieval/`。已验证结果存在
+候选缺失、Rerank 截断和 Multi Summary 证据覆盖不足，不继续调整
+Reranker、全局阈值或上下文选择，后续从现有 run 继续。
 
 数据集至少覆盖：
 
@@ -169,7 +184,7 @@ Kafka / Kubernetes / 微服务拆分
 
 ### 0.5 当前质量基线规则
 
-历史审计曾记录 `240 passed, 6 warnings`，但该数字不是永久有效事实。每次需要对外声明测试数量前，必须在当前 commit 重新运行并记录结果。
+文档不保存固定测试数量。每次需要对外声明测试结果前，必须在当前 commit 重新运行并记录。
 
 用户当前要求：
 
@@ -244,7 +259,7 @@ D:\MedRag
 
 当前项目已经达到：
 
-> 完整可演示的单文档 RAG 应用
+> 完整可演示的多文档知识库 RAG 应用，当前处于 Stage B 评估闭环
 
 当前不是入门 Demo，但暂时不要描述为“企业级多文档知识库”。
 
@@ -277,13 +292,7 @@ D:\MedRag
 * Recall / MRR / 引用准确性等指标
 * 自动化测试
 
-当前稳定测试基线：
-
-```text
-76 passed
-```
-
-后续任何修改都不能无理由破坏现有测试基线。
+测试状态以当前 commit 的实际运行结果为准；未经用户明确要求，不运行 pytest。
 
 ---
 
@@ -435,15 +444,9 @@ Citation Accuracy
 Faithfulness
 ```
 
-开发过程中可以频繁运行测试。
+只有用户明确要求时才运行 pytest；否则只提供验证命令。
 
 不要频繁运行完整 RAG 实验。
-
-当前基线：
-
-```text
-76 passed
-```
 
 已有测试出现 regression 时：
 
@@ -602,15 +605,15 @@ Milvus
 
 ---
 
-# 8. 当前立即执行任务
+# 8. 历史阶段说明：Phase 1 起始任务
 
-现在只执行：
+历史上该阶段只执行：
 
 ```text
 Phase 1
 ```
 
-当前第一主线：
+当时第一主线：
 
 ```text
 Chunking V2
@@ -628,7 +631,7 @@ tests/
 eval/
 ```
 
-当前阶段不要主动修改：
+该历史阶段不主动修改：
 
 ```text
 Knowledge Base
@@ -694,7 +697,7 @@ parent_child
 semantic
 ```
 
-但当前 Phase 1 只实现：
+该历史 Phase 1 当时只实现：
 
 ```text
 fixed
@@ -2897,13 +2900,7 @@ pytest tests/test_text_splitter_service.py -v
 pytest
 ```
 
-当前历史稳定基线：
-
-```text
-76 passed
-```
-
-如果测试数量增加是正常现象。
+测试数量以对应 commit 的实际运行结果为准。
 
 如果已有测试失败：
 
@@ -2961,9 +2958,9 @@ Search Call Sites
 
 ---
 
-# 79. 当前 Phase 1 状态模板
+# 79. 历史 Phase 1 状态模板
 
-每次 Phase 1 结束任务都更新认知：
+以下模板仅用于回顾 Phase 1，不代表当前进度：
 
 ```text
 Phase 1: Chunking V2 + Index Version
@@ -2988,11 +2985,11 @@ Phase 1: Chunking V2 + Index Version
 
 ---
 
-# 80. 当前最重要规则
+# 80. 历史 Phase 开发规则
 
 Codex 必须记住：
 
-> 当前阶段先开发，阶段完成后再统一做实验。
+> 历史开发阶段先完成实现，再统一做实验；当前以第 0 节 Stage B 顺序为准。
 
 不要：
 
@@ -3034,9 +3031,9 @@ Tests Stable
 
 ---
 
-# 82. 当前最优先任务
+# 82. 历史 Phase 1 首要任务
 
-现在从：
+历史上从：
 
 ```text
 medrag/backend/services/text_splitter_service.py
@@ -3138,9 +3135,8 @@ Offline Evaluation
 2. 首先查看 `git status`。
 3. 读取当前目标模块和测试。
 4. 不覆盖用户已有修改。
-5. 当前专注 Phase 1。
-6. 先实现完整功能。
-7. 修改后运行相关测试。
-8. 阶段未完成时继续开发，不主动运行完整 RAG 效果实验。
-9. Phase 1 完成后，再统一进行 Fixed vs Recursive Evaluation。
-10. 每轮结束汇报修改文件、测试结果、Phase 进度和下一步。
+5. 当前专注 Stage B：Generation Evaluation Closure。
+6. Summary 检索专项评估已完成，效果优化待后续；不得将 Summary 阶段描述为当前工作。
+7. 完成当前固定 20 题 Generation 与 Judge、人工抽检及坏例结论后，才可评估 Stage B 是否关闭。
+8. 未经用户明确要求，不运行 pytest 或完整效果实验。
+9. 每轮结束汇报修改文件、验证状态、Stage 进度和下一步。

@@ -2,6 +2,23 @@
 
 评估目录只负责衡量系统效果，不承担业务代码和普通接口回归测试。
 
+## Stage B Closure（正式基线）
+
+Stage B 于 2026-09-26 收口。正式评估基线为
+`generation-single_turn-20260925T050759588111Z`（20/20 Generation）与
+`judge-20260925T055551281478Z` 加 `judge-20260925T065944162831Z`
+（补跑 RAG-03 后 Judge 20/20）。人工参与复核记录：
+`eval/manual_review_v2.json`。详细逐题结果及 manifest 保留在
+`eval/runs/stage_b_closure/stage-b-closure-20260925T071022Z/`。
+
+Generation 原始请求/答案结果不因后续指标审计而重写。最终拒答指标使用
+`correct_refusal_without_sources_v1` 口径；其离线拒答检测器在评估后有小幅
+修正，不改变 Generation、Retrieval 或 Prompt。该 run 的冻结源码快照与
+Stage B 冻结 commit 的对应关系记录在 closure manifest。
+
+另有最新 run 18/20 出现偶发本地后端 HTTP 500，根因尚未定位。此为
+Reliability/工程稳定性阶段的非阻塞 Known Issue，不覆盖上述正式评估基线。
+
 ## 目录
 
 ```text
@@ -73,18 +90,26 @@ D:\Anaconda\envs\medrag\python.exe -m eval.tools.validate_dataset --require-gold
 
 这里只证明数据结构、PDF 哈希、页码和原文证据合法。
 
+查看题型、追问和跨文档覆盖缺口：
+
+```cmd
+D:\Anaconda\envs\medrag\python.exe -m eval.tools.audit_dataset_coverage
+```
+
+单文档案例使用 `document_key`；跨文档案例使用 `document_keys`。跨文档生成评估会通过公开 API 创建评估知识库，并使用 `selected_document_ids` 限定案例范围。检索评估会对同一文档集合执行一次 Dense 查询；跨文档案例不计算容易产生歧义的页码指标，只计算带 `document_key` 的 evidence 指标。
+
 ## 2. 检索评估
 
 先启动本地后端，再执行：
 
 ```cmd
-D:\Anaconda\envs\medrag\python.exe -m eval.runners.retrieval --modes dense dense_rerank hybrid_rerank --candidate-k 15 --top-k 3
+D:\Anaconda\envs\medrag\python.exe -m eval.runners.retrieval --modes dense dense_rerank hybrid_rerank --candidate-k 15 --top-k 3 --metric-k 3 5 15
 ```
 
 低成本运行单题：
 
 ```cmd
-D:\Anaconda\envs\medrag\python.exe -m eval.runners.retrieval --modes dense dense_rerank hybrid_rerank --candidate-k 15 --top-k 3 --case-id RAG-01
+D:\Anaconda\envs\medrag\python.exe -m eval.runners.retrieval --modes dense dense_rerank hybrid_rerank --candidate-k 15 --top-k 3 --metric-k 3 5 15 --case-id RAG-01
 ```
 
 重复传入 `--case-id` 可以运行一组指定案例。
@@ -132,8 +157,12 @@ D:\Anaconda\envs\medrag\python.exe -m eval.runners.generation --suite all
 D:\Anaconda\envs\medrag\python.exe -m eval.runners.generation --suite single_turn --case-id RAG-01 --request-interval 0
 ```
 
-生成评估会调用真实 LLM。执行成功率、路由、拒答和引用存在性可以自动
-统计；正确性、完整性、忠实性和引用正确性仍需人工复核。
+生成评估会调用真实 LLM，并保存数据集指纹、服务版本、模型/检索配置、
+Prompt 指纹、逐题来源、失败阶段、P50/P95 延迟和供应商 Token 用量。
+无答案误答率使用拒答短语与语义模式启发式统计，并在逐题结果中保留
+拒答判定轨迹；该指标仍需人工抽检。正确性、完整性、忠实性和引用正确性
+由后续 Judge 评分并保留理由。正确拒答且没有检索来源时，Faithfulness
+和 Citation Correctness 标记为 N/A；原始 Judge 分数保留在 `raw_scores`。
 
 ## 4. LLM Judge
 

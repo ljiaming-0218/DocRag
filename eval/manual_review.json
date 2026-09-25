@@ -1,0 +1,288 @@
+{
+  "review_type": "Source-by-source manual-style independent review by ChatGPT, based only on actual.answer, actual.sources, reference_answer, and answer_points; not a human sign-off.",
+  "status": "manual_review_completed_pending_user_signoff",
+  "cases": [
+    {
+      "case_id": "RAG-03",
+      "kind": "retrieval_gap_and_answer_incompleteness",
+      "finding": "Top sources cover knowledge-intensive QA and several RAG results, but do not contain the replace-index/update-knowledge evidence; answer also omits abstract QA and Jeopardy generation coverage. Judge supplement: correctness 0.7, completeness 0.8, faithfulness 0.9, citation 0.9.",
+      "source_pages": [
+        1,
+        2,
+        4,
+        5,
+        18
+      ],
+      "manual_review": {
+        "answer_correctness": {
+          "score": 1.0,
+          "reason": "回答中关于开放域 QA、FEVER、三项开放域 QA 达到 SOTA、生成更具体/多样/符合事实等陈述均正确并与来源一致。"
+        },
+        "answer_completeness": {
+          "score": 0.8,
+          "reason": "5 个必答点中覆盖开放域问答、事实验证、三项 SOTA、生成质量四点；未覆盖“通过替换非参数化索引更新外部知识”。"
+        },
+        "faithfulness": {
+          "score": 1.0,
+          "reason": "回答实际给出的实验与方法结论均能在原始 actual.sources 中找到支持；未把缺失的索引替换结论强行写入答案。"
+        },
+        "citation_correctness": {
+          "score": 1.0,
+          "reason": "原始来源能够支持回答中的对应结论；补跑 Judge 的较低分主要反映缺失项，本次将其计入 completeness 而非把已给出的正确引用降分。"
+        }
+      }
+    },
+    {
+      "case_id": "COT-01",
+      "kind": "retrieval_miss",
+      "finding": "Retrieved pages focus on experiments/scale and length generalization; few-shot/intermediate-step definition is absent. The answer is source-faithful but misses the defining mechanism, matching low correctness/completeness.",
+      "source_pages": [
+        4,
+        5,
+        8
+      ],
+      "manual_review": {
+        "answer_correctness": {
+          "score": 0.6,
+          "reason": "回答关于多步推理、数学问题和规模涌现的陈述本身正确，但没有给出“few-shot 示例中加入中间推理步骤”这一核心定义，对“是什么”的回答偏离重点。"
+        },
+        "answer_completeness": {
+          "score": 0.33,
+          "reason": "3 个必答点中仅部分覆盖“引导模型产生多步推理”；未覆盖提示示例中的中间推理步骤，也未明确说明将复杂问题分解为中间步骤。"
+        },
+        "faithfulness": {
+          "score": 1.0,
+          "reason": "回答中的规模涌现、多步推理和数学问题求解陈述均可由实际来源页 4、5、8 支持。"
+        },
+        "citation_correctness": {
+          "score": 1.0,
+          "reason": "actual.sources 能直接支持回答中实际给出的结论；本次人工评分不因缺少内联编号本身扣分。"
+        }
+      }
+    },
+    {
+      "case_id": "COT-02",
+      "kind": "evaluation_contract_suspect",
+      "finding": "The answer directly gives eight examples and the GSM8K result. Judge completeness penalizes omission of the fine-tuned-GPT comparison, which is not explicitly requested by the query; preserve the score but treat this as a likely answer_points scope mismatch pending owner review.",
+      "source_pages": [
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "case_id": "COT-03",
+      "kind": "retrieval_gap_and_answer_incompleteness",
+      "finding": "Arithmetic and commonsense evidence is retrieved; a concrete symbolic task example is not present in the selected sources, so the answer names the category but does not satisfy the requested example.",
+      "source_pages": [
+        3,
+        4,
+        7,
+        8,
+        18,
+        19
+      ],
+      "manual_review": {
+        "answer_correctness": {
+          "score": 1.0,
+          "reason": "三类推理任务的分类正确，列出的算术与常识数据集正确，对符号推理性质的描述也与来源一致。"
+        },
+        "answer_completeness": {
+          "score": 0.67,
+          "reason": "算术推理和常识推理均给出了对应数据集；符号推理只给出类别与性质，没有按要求举出具体任务，因此完成 2/3 个必答点。"
+        },
+        "faithfulness": {
+          "score": 1.0,
+          "reason": "算术数据集、常识数据集和符号推理描述均能在 actual.sources 中找到支持。"
+        },
+        "citation_correctness": {
+          "score": 1.0,
+          "reason": "实际来源分别支持三类任务及已列出的数据集/任务性质，来源与回答内容匹配。"
+        }
+      }
+    },
+    {
+      "case_id": "COT-TERM-01",
+      "kind": "answer_language_mismatch",
+      "finding": "Page 2 contains the few-shot/intermediate-reasoning definition and the answer is substantively supported. Main defect is English output for a Chinese query; Judge correctness/completeness/faithfulness/citation were 0.9/0.9/1.0/1.0.",
+      "source_pages": [
+        2,
+        8,
+        19
+      ]
+    },
+    {
+      "case_id": "LORA-03",
+      "kind": "route_label_and_retrieval_scope",
+      "finding": "Question asks why, so QA is a defensible route despite dataset expected_task=summary. Retrieved pages support sequential Adapter latency and LoRA no-extra-latency, but not weight merging; answer omits the merge mechanism. This combines a questionable expected-task label with an evidence gap.",
+      "source_pages": [
+        1,
+        3,
+        12
+      ],
+      "manual_review": {
+        "answer_correctness": {
+          "score": 1.0,
+          "reason": "关于 Adapter 顺序计算导致在线推理延迟，以及 LoRA 无额外推理延迟的结论均正确。"
+        },
+        "answer_completeness": {
+          "score": 0.75,
+          "reason": "4 个必答点覆盖了 Adapter 额外/顺序计算、Adapter 延迟、LoRA 无额外推理延迟；未说明 LoRA 更新可合并回原始权重。"
+        },
+        "faithfulness": {
+          "score": 1.0,
+          "reason": "回答中的全部事实均由页 1、3、12 的来源直接支持。"
+        },
+        "citation_correctness": {
+          "score": 1.0,
+          "reason": "来源对 Adapter 延迟原因和 LoRA 无额外延迟均有直接证据，能够支持对应结论。"
+        }
+      }
+    },
+    {
+      "case_id": "LORA-SUMMARY-01",
+      "kind": "language_and_citation_contract",
+      "finding": "All requested LoRA mechanisms/efficiency/inference points appear in the answer and sources. Answer is English for a Chinese query. Low citation score partly reflects absent inline citation markers although source cards are separately returned; confirm whether the evaluation contract requires inline markers.",
+      "source_pages": [
+        1,
+        2,
+        5,
+        12
+      ],
+      "manual_review": {
+        "answer_correctness": {
+          "score": 1.0,
+          "reason": "核心机制、参数量、GPU 显存、权重合并及推理延迟等事实均与参考答案和来源一致；英文作答不作为本项事实正确性扣分依据。"
+        },
+        "answer_completeness": {
+          "score": 1.0,
+          "reason": "4 个必答点全部覆盖：冻结权重并训练低秩矩阵、参数约减少一万倍、显存约降低三倍、权重可合并且不增加额外推理延迟。"
+        },
+        "faithfulness": {
+          "score": 1.0,
+          "reason": "回答中的主要事实及附加说明均能在 actual.sources 中找到对应依据。"
+        },
+        "citation_correctness": {
+          "score": 1.0,
+          "reason": "返回的 source cards 能支持对应结论；本次按“来源是否支持结论”评分，不单独因缺少内联编号扣分。"
+        }
+      }
+    },
+    {
+      "case_id": "MULTI-COMP-01",
+      "kind": "cross_document_retrieval_miss",
+      "finding": "Only LoRA sources (pages 1 and 6) were retrieved; no CoT source reached the answer. The answer correctly discloses missing evidence rather than inventing CoT facts, but the comparison task fails due retrieval coverage.",
+      "source_pages": [
+        1,
+        6
+      ],
+      "manual_review": {
+        "answer_correctness": {
+          "score": 0.9,
+          "reason": "LoRA 部分事实准确，且在没有 CoT 来源时明确说明证据缺失而没有编造；但作为双对象比较，只形成了一侧的实质答案。"
+        },
+        "answer_completeness": {
+          "score": 0.5,
+          "reason": "4 个必答点中仅覆盖 LoRA 的作用阶段和低秩适配机制，CoT 的提示/推理阶段与中间推理步骤两个要点均缺失。"
+        },
+        "faithfulness": {
+          "score": 1.0,
+          "reason": "LoRA 结论均由页 1、6 的来源支持，并且对 CoT 明确拒绝无证据扩展，没有引入无来源事实。"
+        },
+        "citation_correctness": {
+          "score": 1.0,
+          "reason": "实际返回的两个 LoRA 来源能够直接支持回答中给出的 LoRA 结论。"
+        }
+      }
+    },
+    {
+      "case_id": "MULTI-SUMMARY-01",
+      "kind": "evidence_coverage_and_summary_focus",
+      "finding": "All three documents are represented, but selected LoRA pages 5/8 miss its core low-rank mechanism and selected CoT pages 3/4/7/8/9 miss the page-2 definition. The answer drifts to experiments/results instead of the requested methods. Document coverage is not evidence coverage.",
+      "source_pages": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        8,
+        9
+      ],
+      "manual_review": {
+        "answer_correctness": {
+          "score": 0.9,
+          "reason": "RAG、LoRA、CoT 三部分所述事实大体正确，但 LoRA 和 CoT 的内容重点偏向实验/结果，没有准确概括题目要求的核心方法。"
+        },
+        "answer_completeness": {
+          "score": 0.5,
+          "reason": "4 个必答点中覆盖了 RAG 的参数化/非参数化结合，并分别涉及三篇文档；没有覆盖 LoRA 的“冻结权重+低秩矩阵”和 CoT 的“中间推理步骤分解问题”。"
+        },
+        "faithfulness": {
+          "score": 0.95,
+          "reason": "绝大多数陈述有来源支持；将截断/乱码片段中的“IDIA Tesla V100”规范化为“NVIDIA Tesla V100”属于轻微超出严格逐字证据的修正。"
+        },
+        "citation_correctness": {
+          "score": 0.95,
+          "reason": "按文档名称给出的来源总体与各段结论匹配，但引用粒度较粗，且存在上述硬件名称的轻微来源文本偏差。"
+        }
+      }
+    },
+    {
+      "case_id": "RAG-01",
+      "kind": "route_metric_ambiguous",
+      "finding": "The question asks what two memory types are, while the system chose comparison and returned a structured contrast. Expected task=qa may be defensible; this case makes route accuracy sensitive to borderline labels.",
+      "source_pages": [
+        1,
+        2
+      ]
+    },
+    {
+      "case_id": "RAG-02",
+      "kind": "expected_route_label_suspect",
+      "finding": "The query explicitly asks the difference between RAG-Sequence and RAG-Token; comparison is the natural route although expected_task=qa. Treat the 85% route metric as label-dependent, not a clean router failure rate.",
+      "source_pages": [
+        1,
+        2
+      ]
+    },
+    {
+      "case_id": "RAG-04",
+      "kind": "correct_refusal_metric_adjustment",
+      "finding": "Correct abstention with no sources. Raw Judge faithfulness/citation zeros are retained under raw_scores; adjusted values are N/A."
+    },
+    {
+      "case_id": "COT-04",
+      "kind": "correct_refusal_metric_adjustment",
+      "finding": "Correct abstention with no sources. Raw Judge faithfulness/citation zeros are retained under raw_scores; adjusted values are N/A."
+    },
+    {
+      "case_id": "LORA-04",
+      "kind": "correct_refusal_false_positive_fixed",
+      "finding": "Answer explicitly says current document lacks medical-imaging results and gives supported examples from the paper. Pattern-based detector now classifies it as a refusal; because a source is present, faithfulness/citation remain applicable."
+    }
+  ],
+  "manual_review_scores_written": true,
+  "reason_scores_not_written": null,
+  "review_method": {
+    "model_rerun": false,
+    "pytest_run": false,
+    "citation_policy": "Score whether actual.sources support the corresponding answer claims; absence of inline citation markers alone is not penalized.",
+    "na_policy": "For a correct refusal with no sources, faithfulness and citation_correctness would be N/A. None of the seven requested cases required N/A."
+  },
+  "reviewed_case_ids": [
+    "COT-01",
+    "COT-03",
+    "LORA-03",
+    "LORA-SUMMARY-01",
+    "MULTI-COMP-01",
+    "MULTI-SUMMARY-01",
+    "RAG-03"
+  ],
+  "manual_review_averages": {
+    "answer_correctness": 0.9143,
+    "answer_completeness": 0.65,
+    "faithfulness": 0.9929,
+    "citation_correctness": 0.9929
+  }
+}

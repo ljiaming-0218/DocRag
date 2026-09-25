@@ -47,13 +47,76 @@ def build_seed_context(
 def build_default_summary_queries(query: str) -> list[str]:
     """Provide stable coverage dimensions before optional LLM refinement."""
     if re.search(r"[\u4e00-\u9fff]", query):
-        return [
-            "论文研究了什么问题或任务？",
-            "论文提出或使用了什么核心方法？",
-            "论文在哪些任务、数据集或实验场景中进行了评估？",
-            "论文的主要实验结果以及与基线方法的比较是什么？",
-            "论文关于事实性、局限、结论或知识更新有哪些发现？",
+        asks_for_task_types = "任务类型" in query
+        asks_for_findings = any(
+            term in query
+            for term in (
+                "实验结论", "主要结论", "研究结论", "结论是",
+                "事实性", "知识更新", "幻觉",
+            )
+        )
+        if asks_for_task_types and asks_for_findings:
+            if re.search(r"\bRAG\b", query, flags=re.IGNORECASE):
+                return [
+                    "Which open-domain and abstractive question answering tasks are evaluated?",
+                    "Which open-domain question generation tasks are evaluated?",
+                    "Which fact verification tasks are evaluated?",
+                    "What state-of-the-art results are reported for open-domain QA?",
+                    "How do factuality and hallucination compare with the baseline?",
+                    "Can external or non-parametric memory update world knowledge?",
+                ]
+            return [
+                "Which question answering tasks and datasets are evaluated?",
+                "Which generation tasks and datasets are evaluated?",
+                "Which classification or fact verification tasks are evaluated?",
+                "Which results establish state-of-the-art performance?",
+                "What findings concern factuality and hallucination?",
+                "What findings concern updating external knowledge?",
+            ]
+
+        queries = [
+            "What research problem does the paper address?",
+            "What is the paper's core method, model architecture, and key mechanism?",
+            "What tasks, datasets, and benchmarks are evaluated?",
+            "What are the main experimental results and baseline comparisons?",
         ]
+        asks_for_reasoning_tasks = any(
+            term in query
+            for term in (
+                "算术", "数学", "常识", "符号", "推理任务", "推理类型",
+            )
+        )
+        if asks_for_reasoning_tasks:
+            queries = [
+                "What arithmetic reasoning tasks and datasets are evaluated?",
+                "What commonsense reasoning tasks and datasets are evaluated?",
+                "Which symbolic reasoning benchmarks and task examples are evaluated?",
+                "What tasks, datasets, and benchmarks are evaluated?",
+                "What are the main experimental results and baseline comparisons?",
+            ]
+        if any(
+            term in query
+            for term in (
+                "效率", "参数", "显存", "推理效率", "推理延迟", "推理速度",
+            )
+        ):
+            queries.append(
+                "What are the trainable components, parameter efficiency, "
+                "GPU memory requirements, weight merging, and inference latency?"
+            )
+        if asks_for_task_types:
+            queries.extend([
+                "Which question answering tasks and datasets are evaluated?",
+                "Which generation tasks and datasets are evaluated?",
+                "Which classification or fact verification tasks are evaluated?",
+            ])
+        if asks_for_findings:
+            queries.extend([
+                "Which results establish state-of-the-art performance?",
+                "What findings concern factuality and hallucination?",
+                "What findings concern updating external knowledge?",
+            ])
+        return queries
     return [
         "What problem or task does the paper study?",
         "What core method does the paper propose or use?",

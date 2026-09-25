@@ -24,11 +24,12 @@ def configure_roles(monkeypatch):
     monkeypatch.setattr(service, "_clients", {})
 
 
-def make_client_response(content):
+def make_client_response(content, usage=None):
     create = Mock(return_value=SimpleNamespace(
         choices=[SimpleNamespace(
             message=SimpleNamespace(content=content),
         )],
+        usage=usage,
     ))
     client = SimpleNamespace(
         chat=SimpleNamespace(
@@ -103,3 +104,21 @@ def test_generate_answer_uses_answer_model(monkeypatch):
     assert result == "final answer"
     create_client.assert_called_once_with("answer")
     assert create.call_args.kwargs["model"] == "answer-model"
+
+
+def test_generate_answer_records_provider_token_usage(monkeypatch):
+    configure_roles(monkeypatch)
+    usage = SimpleNamespace(
+        prompt_tokens=100,
+        completion_tokens=20,
+        total_tokens=120,
+    )
+    client, _create = make_client_response("answer", usage=usage)
+    monkeypatch.setattr(service, "create_llm_client", Mock(return_value=client))
+
+    token = service.begin_llm_usage_tracking()
+    service.generate_answer("prompt", operation="answer")
+    result = service.finish_llm_usage_tracking(token)
+
+    assert result["total_tokens"] == 120
+    assert result["calls"][0]["operation"] == "answer"

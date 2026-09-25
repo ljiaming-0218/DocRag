@@ -1,3 +1,4 @@
+import math
 from unittest.mock import Mock
 
 import pytest
@@ -49,6 +50,16 @@ def test_validate_run_config_rejects_candidate_pool_smaller_than_top_k():
         validate_run_config(["dense"], candidate_k=2, top_k=3)
 
 
+def test_validate_run_config_rejects_metric_k_above_candidate_pool():
+    with pytest.raises(ValueError, match="metric_k"):
+        validate_run_config(
+            ["dense"],
+            candidate_k=10,
+            top_k=3,
+            metric_k_values=[3, 5, 15],
+        )
+
+
 def test_page_metrics_are_not_applicable_without_gold_pages():
     metrics = calculate_page_metrics([], [], top_k=3)
 
@@ -70,6 +81,18 @@ def test_page_metrics_calculate_hit_recall_and_first_relevant_rank():
     assert metrics["mrr_at_3"] == 0.5
 
 
+def test_page_metrics_are_disabled_for_multi_document_cases():
+    metrics = calculate_page_metrics(
+        [1],
+        [{"page_number": 1, "document_key": "rag"}],
+        top_k=1,
+        document_count=2,
+    )
+
+    assert metrics["retrieval_evaluable"] is False
+    assert "multiple documents" in metrics["reason"]
+
+
 def test_dense_mode_does_not_call_fusion_or_rerank():
     dependencies = make_dependencies(
         [make_candidate(1, 0), make_candidate(2, 1)]
@@ -79,8 +102,9 @@ def test_dense_mode_does_not_call_fusion_or_rerank():
         "dense",
         dependencies,
         user_id="user-1",
-        document_id="document-1",
-        index_generation_id="generation-1",
+        document_ids=["document-1"],
+        index_generations={"document-1": "generation-1"},
+        document_keys_by_id={"document-1": "rag"},
         query="LoRA",
         candidate_k=10,
         top_k=1,
@@ -100,8 +124,9 @@ def test_dense_rerank_reranks_dense_candidates_once():
         "dense_rerank",
         dependencies,
         user_id="user-1",
-        document_id="document-1",
-        index_generation_id="generation-1",
+        document_ids=["document-1"],
+        index_generations={"document-1": "generation-1"},
+        document_keys_by_id={"document-1": "rag"},
         query="LoRA",
         candidate_k=10,
         top_k=1,
@@ -121,8 +146,9 @@ def test_hybrid_rerank_fuses_before_reranking():
         "hybrid_rerank",
         dependencies,
         user_id="user-1",
-        document_id="document-1",
-        index_generation_id="generation-1",
+        document_ids=["document-1"],
+        index_generations={"document-1": "generation-1"},
+        document_keys_by_id={"document-1": "rag"},
         query="LoRA",
         candidate_k=10,
         top_k=1,
@@ -214,6 +240,26 @@ def test_evidence_metrics_require_matching_page_and_text():
     assert metrics["matched_evidence_ids"] == ["LORA-01-E1"]
 
 
+def test_evidence_metrics_report_ndcg_ranking_quality():
+    evidence = [
+        {"evidence_id": "E1", "page": 1, "text": "first evidence"},
+        {"evidence_id": "E2", "page": 1, "text": "second evidence"},
+    ]
+    candidates = [
+        {"page_number": 1, "text": "unrelated"},
+        {"page_number": 1, "text": "first evidence"},
+        {"page_number": 1, "text": "second evidence"},
+    ]
+
+    metrics = calculate_evidence_metrics(evidence, candidates, top_k=3)
+
+    expected_dcg = 1 / math.log2(3) + 1 / math.log2(4)
+    ideal_dcg = 1 + 1 / math.log2(3)
+    assert metrics["evidence_ndcg_at_3"] == pytest.approx(
+        expected_dcg / ideal_dcg
+    )
+
+
 def test_evidence_group_matches_any_alternative_without_growing_denominator():
     candidates = [{
         "page_number": 1,
@@ -232,6 +278,24 @@ def test_evidence_group_matches_any_alternative_without_growing_denominator():
     assert metrics["metric_basis"] == "gold_evidence_group"
     assert metrics["evidence_recall_at_1"] == 1.0
     assert metrics["matched_evidence_ids"] == ["LORA-01-G1"]
+
+
+def test_evidence_metrics_require_matching_document_for_multi_document_case():
+    evidence = [{
+        "evidence_id": "MULTI-E1",
+        "document_key": "lora",
+        "page": 1,
+        "text": "freezes the pre-trained model weights",
+    }]
+    candidates = [{
+        "document_key": "cot",
+        "page_number": 1,
+        "text": "freezes the pre-trained model weights",
+    }]
+
+    metrics = calculate_evidence_metrics(evidence, candidates, top_k=1)
+
+    assert metrics["evidence_recall_at_1"] == 0.0
 
 
 def test_retrieval_summary_keeps_modes_separate():
@@ -262,6 +326,52 @@ def test_retrieval_summary_keeps_modes_separate():
     assert dense["execution_success_rate"] == 1.0
     assert dense["stages"]["final"]["evidence_recall_at_3"] == 0.5
     assert dense["latency_seconds"]["p95"] == 0.25
+
+
+def test_retrieval_summary_reports_multiple_ranking_cutoffs():
+    run = {
+        "config": {
+            "modes": ["dense"],
+            "candidate_k": 15,
+            "top_k": 3,
+            "metric_k_values": [3, 5],
+        },
+        "results": [{
+            "category": "fact",
+            "answerable": True,
+            "modes": {
+                "dense": {
+                    "elapsed_seconds": 0.2,
+                    "metrics": {
+                        "candidate_by_k": {
+                            "3": {"evidence": {
+                                "evidence_evaluable": True,
+                                "evidence_hit_rate_at_3": 1.0,
+                                "evidence_recall_at_3": 0.5,
+                                "evidence_mrr_at_3": 1.0,
+                                "evidence_ndcg_at_3": 1.0,
+                            }},
+                            "5": {"evidence": {
+                                "evidence_evaluable": True,
+                                "evidence_hit_rate_at_5": 1.0,
+                                "evidence_recall_at_5": 1.0,
+                                "evidence_mrr_at_5": 1.0,
+                                "evidence_ndcg_at_5": 0.9,
+                            }},
+                        },
+                    },
+                },
+            },
+        }],
+    }
+
+    summary = summarize_retrieval_results(run)
+    candidate = summary["modes"]["dense"]["ranking_at_k"][
+        "candidate_by_k"
+    ]
+
+    assert candidate["3"]["evidence_recall_at_3"] == 0.5
+    assert candidate["5"]["evidence_recall_at_5"] == 1.0
 
 
 def test_retrieval_summary_counts_failed_cases_by_category():

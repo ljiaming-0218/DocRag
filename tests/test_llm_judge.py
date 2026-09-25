@@ -7,7 +7,10 @@ from eval.judges.llm_judge import (
     judge_case,
     parse_judge_response,
 )
-from eval.metrics.generation import summarize_generation_results
+from eval.metrics.generation import (
+    apply_no_answer_judge_policy,
+    summarize_generation_results,
+)
 from eval.runners.judge import select_cases
 
 
@@ -58,6 +61,21 @@ def test_parse_judge_response_accepts_fenced_json():
     parsed = parse_judge_response("```json\n" + judge_json(0.75) + "\n```")
 
     assert parsed["answer_correctness"]["score"] == 0.75
+
+
+def test_parse_judge_response_accepts_wrapped_multiline_json_with_trailing_comma():
+    response = (
+        '{"answer_correctness":{"score":0.75,"reason":"first line\nsecond line"},'
+        '"answer_completeness":{"score":0.75,"reason":"ok"},'
+        '"faithfulness":{"score":0.75,"reason":"ok"},'
+        '"citation_correctness":{"score":0.75,"reason":"ok"}'
+        '}'
+    )
+    response = "Judge result:\n" + response[:-1] + ",}\nDone"
+
+    parsed = parse_judge_response(response)
+
+    assert parsed["answer_correctness"]["reason"] == "first line\nsecond line"
 
 
 def test_parse_judge_response_rejects_score_outside_range():
@@ -123,6 +141,27 @@ def test_generation_summary_keeps_failed_judges_in_denominator():
     assert judge["successful_cases"] == 1
     assert judge["execution_success_rate"] == 0.5
     assert judge["error_types"] == {"LLMServiceError": 1}
+
+
+def test_correct_no_answer_without_sources_marks_grounding_scores_not_applicable():
+    case = make_case()
+    case["answerable"] = False
+    case["actual"]["answer"] = "当前文档未提供相关信息。"
+    case["actual"]["sources"] = []
+    judgement = {
+        "status": "success",
+        "scores": parse_judge_response(judge_json(0.0)),
+    }
+
+    adjusted = apply_no_answer_judge_policy(case, judgement)
+
+    assert adjusted["scores"]["answer_correctness"]["score"] == 0.0
+    assert adjusted["scores"]["faithfulness"]["score"] is None
+    assert adjusted["scores"]["citation_correctness"]["score"] is None
+    assert adjusted["raw_scores"]["faithfulness"]["score"] == 0.0
+    assert adjusted["score_adjustments"]["policy"] == (
+        "correct_refusal_without_sources_v1"
+    )
 
 
 def test_select_cases_rejects_unknown_case_id():

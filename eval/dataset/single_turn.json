@@ -99,6 +99,7 @@
       "document_key": "rag",
       "scenario": "single_turn",
       "category": "summary",
+      "summary_scope": "focused",
       "query": "总结作者评估 RAG 的主要任务类型和实验结论。",
       "history": [],
       "expected_rewritten_query": "总结论文中 RAG 的主要评估任务类型和实验结论。",
@@ -405,6 +406,7 @@
       "document_key": "cot",
       "scenario": "single_turn",
       "category": "summary",
+      "summary_scope": "focused",
       "query": "总结论文评估思维链提示时覆盖的三类推理任务，并各举出至少一个数据集或任务。",
       "history": [],
       "expected_rewritten_query": "总结论文评估 Chain-of-Thought Prompting 时覆盖的三类推理任务，并列举对应数据集或任务。",
@@ -614,6 +616,213 @@
       ],
       "answerable": true,
       "expected_task": "source_check"
+    },
+    {
+      "case_id": "COT-SOURCE-01",
+      "document_key": "cot",
+      "scenario": "single_turn",
+      "category": "source_check",
+      "query": "请核查以下说法是否有论文依据：思维链提示可以把多步问题分解为中间推理步骤。",
+      "history": [],
+      "expected_rewritten_query": "思维链提示是否可以把多步问题分解为中间推理步骤？",
+      "reference_answer": "支持。论文将思维链描述为通向最终输出的一系列中间自然语言推理步骤，并指出它能让模型把多步问题分解为中间步骤。",
+      "answer_points": [
+        "核查结果为支持",
+        "思维链包含中间推理步骤",
+        "可以分解多步问题"
+      ],
+      "gold_pages": [
+        2,
+        3
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "COT-SOURCE-01-E1",
+          "page": 2,
+          "text": "A chain of thought is a series of intermediate natural language reasoning steps that lead to the final output"
+        },
+        {
+          "evidence_id": "COT-SOURCE-01-E2",
+          "page": 3,
+          "text": "allows models to decompose multi-step problems into intermediate steps"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "source_check"
+    },
+    {
+      "case_id": "LORA-SUMMARY-01",
+      "document_key": "lora",
+      "scenario": "single_turn",
+      "category": "summary",
+      "summary_scope": "focused",
+      "query": "总结 LoRA 的核心机制、资源效率优势和推理阶段特点。",
+      "history": [],
+      "expected_rewritten_query": "总结 LoRA 的核心机制、资源效率优势和推理阶段特点。",
+      "reference_answer": "LoRA 冻结预训练权重，并向网络层注入可训练低秩分解矩阵。相对 GPT-3 175B 的全量微调，它可将可训练参数减少约一万倍、GPU 显存需求降低约三倍；训练后的低秩更新可以合并回主权重，因此不增加额外推理延迟。",
+      "answer_points": [
+        "冻结预训练权重并训练低秩矩阵",
+        "可训练参数减少约一万倍",
+        "GPU 显存需求降低约三倍",
+        "权重可合并且不增加额外推理延迟"
+      ],
+      "gold_pages": [
+        1,
+        4,
+        5
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "LORA-SUMMARY-01-E1",
+          "page": 1,
+          "text": "freezes the pre-trained model weights"
+        },
+        {
+          "evidence_id": "LORA-SUMMARY-01-E2",
+          "page": 1,
+          "text": "LoRA can reduce the number of trainable parameters by 10,000 times"
+        },
+        {
+          "evidence_id": "LORA-SUMMARY-01-E3",
+          "page": 1,
+          "text": "the GPU memory requirement by 3 times"
+        },
+        {
+          "evidence_id": "LORA-SUMMARY-01-E4",
+          "alternatives": [
+            {
+              "page": 4,
+              "text": "we can explicitly compute and store W = W0 + BA and perform inference as usual"
+            },
+            {
+              "page": 5,
+              "text": "we do not introduce any additional latency during inference compared to a fine-tuned model"
+            }
+          ]
+        }
+      ],
+      "answerable": true,
+      "expected_task": "summary"
+    },
+    {
+      "case_id": "MULTI-COMP-01",
+      "document_keys": [
+        "lora",
+        "cot"
+      ],
+      "scenario": "single_turn",
+      "category": "comparison",
+      "n_results": 4,
+      "query": "比较 LoRA 和 Chain-of-Thought Prompting：它们分别在模型使用流程的哪个阶段发挥作用，主要改变什么？",
+      "history": [],
+      "expected_rewritten_query": "比较 LoRA 与 Chain-of-Thought Prompting 的作用阶段和核心机制。",
+      "reference_answer": "LoRA 用于模型适配或训练阶段，冻结原始预训练权重并学习低秩更新矩阵；Chain-of-Thought Prompting 用于提示和推理阶段，通过在示例中提供中间推理步骤，引导模型把复杂问题分解后作答。",
+      "answer_points": [
+        "LoRA 作用于参数高效适配或训练",
+        "LoRA 冻结预训练权重并训练低秩矩阵",
+        "CoT 作用于提示和推理阶段",
+        "CoT 使用中间推理步骤分解复杂问题"
+      ],
+      "gold_pages": [
+        1,
+        2,
+        3
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "MULTI-COMP-01-E1",
+          "document_key": "lora",
+          "page": 1,
+          "text": "freezes the pre-trained model weights"
+        },
+        {
+          "evidence_id": "MULTI-COMP-01-E2",
+          "document_key": "lora",
+          "page": 1,
+          "text": "injects trainable rank decomposition matrices into each layer"
+        },
+        {
+          "evidence_id": "MULTI-COMP-01-E3",
+          "document_key": "cot",
+          "page": 2,
+          "text": "A chain of thought is a series of intermediate natural language reasoning steps that lead to the final output"
+        },
+        {
+          "evidence_id": "MULTI-COMP-01-E4",
+          "document_key": "cot",
+          "page": 3,
+          "text": "allows models to decompose multi-step problems into intermediate steps"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "comparison"
+    },
+    {
+      "case_id": "MULTI-SUMMARY-01",
+      "document_keys": [
+        "rag",
+        "lora",
+        "cot"
+      ],
+      "scenario": "single_turn",
+      "category": "summary",
+      "summary_scope": "knowledge_base_overview",
+      "n_results": 6,
+      "query": "分别概括 RAG、LoRA 和 Chain-of-Thought Prompting 三篇论文的核心方法。",
+      "history": [],
+      "expected_rewritten_query": "分别概括 RAG、LoRA 和 Chain-of-Thought Prompting 的核心方法。",
+      "reference_answer": "RAG 将预训练生成模型的参数化记忆与由神经检索器访问的 Wikipedia 稠密向量索引结合；LoRA 冻结预训练权重并训练注入网络层的低秩分解矩阵；Chain-of-Thought Prompting 在提示示例中加入中间推理步骤，引导模型分解多步问题。",
+      "answer_points": [
+        "RAG 结合参数化生成模型与非参数化向量索引",
+        "LoRA 冻结预训练权重并训练低秩矩阵",
+        "CoT 通过中间推理步骤分解多步问题",
+        "分别覆盖三篇文档而不是只总结其中一篇"
+      ],
+      "gold_pages": [
+        1,
+        2,
+        3
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "MULTI-SUMMARY-01-E1",
+          "document_key": "rag",
+          "page": 1,
+          "text": "the parametric memory is a pre-trained seq2seq model"
+        },
+        {
+          "evidence_id": "MULTI-SUMMARY-01-E2",
+          "document_key": "rag",
+          "page": 1,
+          "text": "the non-parametric memory is a dense vector index of Wikipedia"
+        },
+        {
+          "evidence_id": "MULTI-SUMMARY-01-E3",
+          "document_key": "lora",
+          "page": 1,
+          "text": "freezes the pre-trained model weights"
+        },
+        {
+          "evidence_id": "MULTI-SUMMARY-01-E4",
+          "document_key": "lora",
+          "page": 1,
+          "text": "injects trainable rank decomposition matrices into each layer"
+        },
+        {
+          "evidence_id": "MULTI-SUMMARY-01-E5",
+          "document_key": "cot",
+          "page": 2,
+          "text": "A chain of thought is a series of intermediate natural language reasoning steps that lead to the final output"
+        },
+        {
+          "evidence_id": "MULTI-SUMMARY-01-E6",
+          "document_key": "cot",
+          "page": 3,
+          "text": "allows models to decompose multi-step problems into intermediate steps"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "summary"
     }
   ]
 }

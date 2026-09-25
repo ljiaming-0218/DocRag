@@ -29,6 +29,12 @@ def _compact_latin_text(text: str) -> str:
 
 
 def _candidate_matches_span(candidate: dict, evidence: dict) -> bool:
+    expected_document = evidence.get("document_key")
+    if (
+        expected_document is not None
+        and candidate.get("document_key") != expected_document
+    ):
+        return False
     expected_page = evidence.get("page")
     if (
         expected_page is not None
@@ -79,6 +85,7 @@ def calculate_evidence_metrics(
     hit_key = f"evidence_hit_rate_at_{top_k}"
     recall_key = f"evidence_recall_at_{top_k}"
     mrr_key = f"evidence_mrr_at_{top_k}"
+    ndcg_key = f"evidence_ndcg_at_{top_k}"
     if not gold_evidence:
         return {
             "evidence_evaluable": False,
@@ -86,12 +93,32 @@ def calculate_evidence_metrics(
             hit_key: None,
             recall_key: None,
             mrr_key: None,
+            ndcg_key: None,
             "matched_evidence_ids": [],
         }
 
     retrieved = candidates[:top_k]
     matched_ids = []
     first_relevant_rank = None
+    evidence_items = [
+        (
+            evidence.get("evidence_id") or f"evidence-{evidence_index}",
+            evidence,
+        )
+        for evidence_index, evidence in enumerate(gold_evidence, start=1)
+    ]
+    rank_relevances = [
+        int(any(
+            candidate_matches_evidence(candidate, evidence)
+            for _, evidence in evidence_items
+        ))
+        for candidate in retrieved
+    ]
+    for rank, relevance in enumerate(rank_relevances, start=1):
+        if relevance:
+            first_relevant_rank = rank
+            break
+
     for evidence_index, evidence in enumerate(gold_evidence, start=1):
         evidence_id = evidence.get("evidence_id") or f"evidence-{evidence_index}"
         matching_ranks = [
@@ -101,9 +128,14 @@ def calculate_evidence_metrics(
         ]
         if matching_ranks:
             matched_ids.append(evidence_id)
-            rank = min(matching_ranks)
-            if first_relevant_rank is None or rank < first_relevant_rank:
-                first_relevant_rank = rank
+
+    ideal_relevant_count = sum(rank_relevances)
+    ideal_dcg = _discounted_cumulative_gain([1] * ideal_relevant_count)
+    ndcg = (
+        _discounted_cumulative_gain(rank_relevances) / ideal_dcg
+        if ideal_dcg
+        else 0.0
+    )
 
     return {
         "evidence_evaluable": True,
@@ -115,6 +147,7 @@ def calculate_evidence_metrics(
         hit_key: 1.0 if matched_ids else 0.0,
         recall_key: len(matched_ids) / len(gold_evidence),
         mrr_key: 1.0 / first_relevant_rank if first_relevant_rank else 0.0,
+        ndcg_key: ndcg,
         "matched_evidence_ids": matched_ids,
     }
 
@@ -129,6 +162,13 @@ def percentile(values: list[float], percentile_value: float) -> float | None:
 
 def _average(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
+
+
+def _discounted_cumulative_gain(relevances: list[int]) -> float:
+    return sum(
+        relevance / math.log2(rank + 1)
+        for rank, relevance in enumerate(relevances, start=1)
+    )
 
 
 def _summarize_stage(
@@ -149,12 +189,63 @@ def _summarize_stage(
     hit_key = f"evidence_hit_rate_at_{top_k}"
     recall_key = f"evidence_recall_at_{top_k}"
     mrr_key = f"evidence_mrr_at_{top_k}"
+    ndcg_key = f"evidence_ndcg_at_{top_k}"
+    ndcg_values = [
+        metric[ndcg_key]
+        for metric in evidence_metrics
+        if metric.get(ndcg_key) is not None
+    ]
     return {
         "evidence_evaluable_cases": len(evidence_metrics),
         hit_key: _average([metric[hit_key] for metric in evidence_metrics]),
         recall_key: _average([metric[recall_key] for metric in evidence_metrics]),
         mrr_key: _average([metric[mrr_key] for metric in evidence_metrics]),
+        ndcg_key: _average(ndcg_values),
     }
+
+
+def _summarize_stage_cutoffs(
+    modes: list[dict],
+    *,
+    stage: str,
+    cutoffs: list[int],
+) -> dict:
+    summaries = {}
+    for top_k in cutoffs:
+        evidence_metrics = [
+            mode.get("metrics", {})
+            .get(stage, {})
+            .get(str(top_k), {})
+            .get("evidence", {})
+            for mode in modes
+        ]
+        evidence_metrics = [
+            metric
+            for metric in evidence_metrics
+            if metric.get("evidence_evaluable") is True
+        ]
+        hit_key = f"evidence_hit_rate_at_{top_k}"
+        recall_key = f"evidence_recall_at_{top_k}"
+        mrr_key = f"evidence_mrr_at_{top_k}"
+        ndcg_key = f"evidence_ndcg_at_{top_k}"
+        summaries[str(top_k)] = {
+            "evidence_evaluable_cases": len(evidence_metrics),
+            hit_key: _average([
+                metric[hit_key] for metric in evidence_metrics
+            ]),
+            recall_key: _average([
+                metric[recall_key] for metric in evidence_metrics
+            ]),
+            mrr_key: _average([
+                metric[mrr_key] for metric in evidence_metrics
+            ]),
+            ndcg_key: _average([
+                metric[ndcg_key]
+                for metric in evidence_metrics
+                if metric.get(ndcg_key) is not None
+            ]),
+        }
+    return summaries
 
 
 def _summarize_mode_cases(cases: list[dict], mode_name: str, config: dict) -> dict:
@@ -170,6 +261,7 @@ def _summarize_mode_cases(cases: list[dict], mode_name: str, config: dict) -> di
     latencies = [mode["elapsed_seconds"] for mode in successful]
     candidate_k = config.get("candidate_k", 15)
     top_k = config.get("top_k", 3)
+    metric_k_values = config.get("metric_k_values", [3, 5, 15])
     unanswerable = [
         case
         for case in cases
@@ -202,6 +294,18 @@ def _summarize_mode_cases(cases: list[dict], mode_name: str, config: dict) -> di
                 stage="filtered",
                 top_k=top_k,
             ),
+        },
+        "ranking_at_k": {
+            stage: _summarize_stage_cutoffs(
+                successful,
+                stage=stage,
+                cutoffs=metric_k_values,
+            )
+            for stage in (
+                "candidate_by_k",
+                "ranked_by_k",
+                "filtered_ranked_by_k",
+            )
         },
         "unanswerable": {
             "cases": len(unanswerable),

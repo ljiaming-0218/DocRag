@@ -242,6 +242,40 @@ def test_hybrid_multi_document_search_preserves_scope(monkeypatch):
     assert result[0]["retrieval_sources"] == ["dense"]
 
 
+def test_dense_multi_document_search_embeds_query_once(monkeypatch):
+    get_embedding = Mock(return_value=[0.1])
+    query_chunks = Mock(return_value={
+        "ids": [["chunk-1"]],
+        "documents": [["dense evidence"]],
+        "distances": [[0.2]],
+        "metadatas": [[{
+            "document_id": "document-2",
+            "page_number": 1,
+            "chunk_index": 0,
+        }]],
+    })
+    monkeypatch.setattr(service, "get_embedding", get_embedding)
+    monkeypatch.setattr(service, "query_chunks_by_documents", query_chunks)
+
+    result = service.retrieve_dense_candidate_chunks_for_documents(
+        "user-1",
+        ["document-1", "document-2"],
+        "compare methods",
+        10,
+        {"document-1": "generation-1", "document-2": "generation-2"},
+    )
+
+    get_embedding.assert_called_once_with("compare methods")
+    query_chunks.assert_called_once_with(
+        "user-1",
+        ["document-1", "document-2"],
+        [0.1],
+        10,
+        {"document-1": "generation-1", "document-2": "generation-2"},
+    )
+    assert result[0]["chunk_id"] == "chunk-1"
+
+
 def test_invalid_retrieval_mode_stops_before_retrieval(monkeypatch):
     monkeypatch.setattr(service, "RETRIEVAL_MODE", "unsupported")
     dense_retrieval = Mock()
@@ -408,11 +442,26 @@ def test_knowledge_base_overview_preserves_document_coverage(monkeypatch):
         "get_chunks_by_documents",
         read_chunks,
     )
-    summary_queries = Mock()
+    summary_queries = Mock(return_value=["core method query"])
+    retrieve = Mock(side_effect=lambda _user, document_id, *_args: [
+        chunk for chunk in chunks
+        if chunk["元数据"]["document_id"] == document_id
+    ])
     monkeypatch.setattr(
         service,
         "build_summary_subqueries",
         summary_queries,
+    )
+    monkeypatch.setattr(service, "retrieve_candidate_chunks", retrieve)
+    monkeypatch.setattr(
+        service,
+        "rerank_chunks",
+        Mock(side_effect=lambda _query, candidates, top_k: candidates[:top_k]),
+    )
+    monkeypatch.setattr(
+        service,
+        "filter_relevant_evidence",
+        Mock(side_effect=lambda candidates: candidates),
     )
 
     result = service.search_summary_chunks_for_documents(
@@ -435,19 +484,16 @@ def test_knowledge_base_overview_preserves_document_coverage(monkeypatch):
     ]
     assert returned_document_ids == [
         "document-1",
+        "document-2",
+        "document-3",
         "document-1",
         "document-2",
-        "document-2",
-        "document-3",
         "document-3",
     ]
-    assert result["retrieval_queries"] == [
+    assert result["retrieval_queries"][0] == (
         "What do the documents in the current literature cover?"
-    ]
-    assert result["sources"][0]["文本块"].startswith("Abstract:")
-    assert result["sources"][1]["文本块"].endswith(
-        "method and conclusion"
     )
+    assert result["retrieval_queries"][1] == "core method query"
     read_chunks.assert_called_once_with(
         "user-1",
         document_ids,
@@ -456,8 +502,7 @@ def test_knowledge_base_overview_preserves_document_coverage(monkeypatch):
             for document_id in document_ids
         },
     )
-    summary_queries.assert_not_called()
-
+    assert retrieve.call_count == 6
 
 def test_knowledge_base_overview_uses_original_query_after_rewrite(
     monkeypatch,
@@ -475,12 +520,30 @@ def test_knowledge_base_overview_uses_original_query_after_rewrite(
         ),
     ]
     read_chunks = Mock(return_value=chunks)
-    summary_queries = Mock()
+    summary_queries = Mock(return_value=["core method query"])
     monkeypatch.setattr(service, "get_chunks_by_documents", read_chunks)
     monkeypatch.setattr(
         service,
         "build_summary_subqueries",
         summary_queries,
+    )
+    monkeypatch.setattr(
+        service,
+        "retrieve_candidate_chunks",
+        Mock(side_effect=lambda _user, document_id, *_args: [
+            chunk for chunk in chunks
+            if chunk["元数据"]["document_id"] == document_id
+        ]),
+    )
+    monkeypatch.setattr(
+        service,
+        "rerank_chunks",
+        Mock(side_effect=lambda _query, candidates, top_k: candidates[:top_k]),
+    )
+    monkeypatch.setattr(
+        service,
+        "filter_relevant_evidence",
+        Mock(side_effect=lambda candidates: candidates),
     )
 
     result = service.search_summary_chunks_for_documents(
@@ -497,4 +560,38 @@ def test_knowledge_base_overview_uses_original_query_after_rewrite(
         source["元数据"]["document_id"]
         for source in result["sources"]
     } == {"document-1", "document-2"}
-    summary_queries.assert_not_called()
+    summary_queries.assert_called_once()
+    assert len(result["retrieval_queries"]) == 2
+
+
+def test_summary_respects_configured_candidate_and_rerank_windows(monkeypatch):
+    candidates = [
+        make_candidate(f"summary evidence {index}", chunk_index=index)
+        for index in range(8)
+    ]
+    retrieve = Mock(return_value=candidates)
+    rerank = Mock(side_effect=lambda _query, chunks, _top_k: chunks)
+    monkeypatch.setattr(service, "retrieve_candidate_chunks", retrieve)
+    monkeypatch.setattr(service, "rerank_chunks", rerank)
+    monkeypatch.setattr(
+        service,
+        "filter_relevant_evidence",
+        Mock(side_effect=lambda chunks: chunks),
+    )
+    monkeypatch.setattr(
+        service,
+        "build_summary_subqueries",
+        Mock(return_value=["method query"]),
+    )
+
+    service.search_summary_chunks(
+        "user-1",
+        "document-1",
+        "summary query",
+        per_query_k=10,
+        per_query_keep=3,
+        context_k=10,
+    )
+
+    assert retrieve.call_args_list[-1].args[3] == 10
+    assert rerank.call_args_list[-1].args[2] == 3

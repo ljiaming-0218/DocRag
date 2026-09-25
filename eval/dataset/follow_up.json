@@ -124,6 +124,106 @@
       ],
       "answerable": true,
       "expected_task": "qa"
+    },
+    {
+      "case_id": "RAG-06",
+      "document_key": "rag",
+      "scenario": "follow_up",
+      "category": "fact",
+      "query": "其中后者具体是什么，又由什么组件访问？",
+      "history": [
+        {
+          "role": "user",
+          "content": "RAG 包含哪两类记忆？"
+        },
+        {
+          "role": "assistant",
+          "content": "RAG 包含参数化记忆和非参数化记忆。"
+        }
+      ],
+      "expected_rewritten_query": "RAG 的非参数化记忆具体是什么，并由什么组件访问？",
+      "reference_answer": "RAG 的非参数化记忆是 Wikipedia 的稠密向量索引，由预训练神经检索器访问。",
+      "answer_points": [
+        "正确补全后者是非参数化记忆",
+        "非参数化记忆是 Wikipedia 稠密向量索引",
+        "由预训练神经检索器访问"
+      ],
+      "gold_pages": [
+        1,
+        2
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "RAG-06-E1",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "the non-parametric memory is a dense vector index of Wikipedia"
+            },
+            {
+              "page": 2,
+              "text": "the non-parametric memory is a dense vector index of Wikipedia"
+            }
+          ]
+        },
+        {
+          "evidence_id": "RAG-06-E2",
+          "alternatives": [
+            {
+              "page": 1,
+              "text": "accessed with a pre-trained neural retriever"
+            },
+            {
+              "page": 2,
+              "text": "accessed with a pre-trained neural retriever"
+            }
+          ]
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
+    },
+    {
+      "case_id": "COT-06",
+      "document_key": "cot",
+      "scenario": "follow_up",
+      "category": "fact",
+      "query": "它为什么适合处理多步问题？",
+      "history": [
+        {
+          "role": "user",
+          "content": "什么是 Chain-of-Thought Prompting？"
+        },
+        {
+          "role": "assistant",
+          "content": "它通过示例中的中间推理步骤引导模型生成推理链。"
+        }
+      ],
+      "expected_rewritten_query": "Chain-of-Thought Prompting 为什么适合处理多步问题？",
+      "reference_answer": "因为思维链允许模型把多步问题分解为一系列中间步骤，再通过这些步骤得到最终输出。",
+      "answer_points": [
+        "正确补全它是 Chain-of-Thought Prompting",
+        "把多步问题分解为中间步骤",
+        "中间推理步骤通向最终输出"
+      ],
+      "gold_pages": [
+        2,
+        3
+      ],
+      "gold_evidence": [
+        {
+          "evidence_id": "COT-06-E1",
+          "page": 2,
+          "text": "A chain of thought is a series of intermediate natural language reasoning steps that lead to the final output"
+        },
+        {
+          "evidence_id": "COT-06-E2",
+          "page": 3,
+          "text": "allows models to decompose multi-step problems into intermediate steps"
+        }
+      ],
+      "answerable": true,
+      "expected_task": "qa"
     }
   ]
 }

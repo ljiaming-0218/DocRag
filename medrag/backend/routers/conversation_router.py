@@ -3,7 +3,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from api_errors import APIError
-from services.llm_service import LLMServiceError
+from services.llm_service import (
+    LLMServiceError,
+    begin_llm_usage_tracking,
+    finish_llm_usage_tracking,
+)
 from services.document_service import (
     DocumentIndexUnavailableError,
     DocumentNotReadyError,
@@ -117,11 +121,14 @@ async def ask_conversation_endpoint(
     request: AskConversationRequest,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
+    usage_token = None
+    token_usage = None
     try:
         user_id = require_matching_user(
             authenticated_user_id,
             request.user_id,
         )
+        usage_token = begin_llm_usage_tracking()
         result = await ask_conversation(
             user_id,
             conversation_id,
@@ -168,5 +175,9 @@ async def ask_conversation_endpoint(
             code="INVALID_CONVERSATION_REQUEST",
             message=str(error),
         ) from error
-    
+    finally:
+        if usage_token is not None:
+            token_usage = finish_llm_usage_tracking(usage_token)
+
+    result["token_usage"] = token_usage
     return result

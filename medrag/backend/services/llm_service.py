@@ -1,4 +1,5 @@
 import logging
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from threading import Lock
 from time import perf_counter
@@ -26,6 +27,10 @@ logger = logging.getLogger("uvicorn.error")
 _clients: dict[str, OpenAI] = {}
 _client_lock = Lock()
 REWRITE_OPERATIONS = {"task_route", "query_rewrite", "summary_query"}
+_usage_records: ContextVar[list[dict] | None] = ContextVar(
+    "llm_usage_records",
+    default=None,
+)
 
 
 @dataclass(frozen=True)
@@ -43,6 +48,39 @@ class LLMServiceError(RuntimeError):
         super().__init__(message)
         self.code = code
         self.status_code = status_code
+
+
+def begin_llm_usage_tracking() -> Token:
+    return _usage_records.set([])
+
+
+def finish_llm_usage_tracking(token: Token) -> dict:
+    records = list(_usage_records.get() or [])
+    _usage_records.reset(token)
+    return {
+        "prompt_tokens": sum(item["prompt_tokens"] for item in records),
+        "completion_tokens": sum(
+            item["completion_tokens"] for item in records
+        ),
+        "total_tokens": sum(item["total_tokens"] for item in records),
+        "calls": records,
+    }
+
+
+def record_llm_usage(response, operation: str, role: str) -> None:
+    records = _usage_records.get()
+    usage = getattr(response, "usage", None)
+    if records is None or usage is None:
+        return
+    records.append({
+        "operation": operation,
+        "role": role,
+        "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
+        "completion_tokens": int(
+            getattr(usage, "completion_tokens", 0) or 0
+        ),
+        "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
+    })
 
 
 def resolve_llm_role(operation: str) -> str:
@@ -183,6 +221,8 @@ def generate_answer(prompt: str, operation: str = "answer") -> str:
         )
         log_llm_failure(error.code, operation, role, config, started_at, error)
         raise error
+
+    record_llm_usage(response, operation, role)
 
     content = response.choices[0].message.content
     if not content or not content.strip():

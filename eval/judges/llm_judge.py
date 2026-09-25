@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Callable
 
@@ -12,6 +13,20 @@ JUDGE_FIELDS = (
     "faithfulness",
     "citation_correctness",
 )
+JUDGE_VERSION = "llm-judge-v1"
+JUDGE_CRITERIA = {
+    "answer_correctness": "facts agree with the reference answer",
+    "answer_completeness": "covers required_answer_points",
+    "faithfulness": "claims are supported by retrieved_sources",
+    "citation_correctness": "citations directly support the answer claims",
+}
+
+
+def build_unscored_scores(reason: str) -> dict:
+    return {
+        field: {"score": None, "reason": reason}
+        for field in JUDGE_FIELDS
+    }
 
 
 def _source_text(source: dict) -> str:
@@ -65,27 +80,80 @@ def build_judge_prompt(case: dict, max_source_chars: int = 1500) -> str:
     )
 
 
-def parse_judge_response(content: str) -> dict:
-    """Extract and validate one judge JSON object from model output."""
-    text = (content or "").strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
+def _balanced_objects(text: str):
+    for start, char in enumerate(text):
+        if char != "{":
+            continue
+        depth = 0
+        in_string = False
+        escaped = False
+        for end in range(start, len(text)):
+            char = text[end]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    yield text[start:end + 1]
+                    break
 
-    object_start = text.find("{")
-    if object_start < 0:
-        raise ValueError("Judge 响应中没有 JSON 对象")
-    try:
-        parsed, _ = json.JSONDecoder().raw_decode(text[object_start:])
-    except json.JSONDecodeError as error:
-        raise ValueError("Judge 响应不是合法 JSON") from error
-    if not isinstance(parsed, dict):
-        raise ValueError("Judge 响应必须是 JSON 对象")
 
+def _remove_trailing_commas(text: str) -> str:
+    output = []
+    in_string = False
+    escaped = False
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            output.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+            output.append(char)
+        elif char == ",":
+            lookahead = index + 1
+            while lookahead < len(text) and text[lookahead].isspace():
+                lookahead += 1
+            if lookahead < len(text) and text[lookahead] in "}]":
+                pass
+            else:
+                output.append(char)
+        else:
+            output.append(char)
+        index += 1
+    return "".join(output)
+
+
+def _decode_candidate(candidate: str) -> dict | None:
+    cleaned = _remove_trailing_commas(candidate)
+    for text in (candidate, cleaned):
+        for strict in (True, False):
+            try:
+                parsed, _ = json.JSONDecoder(strict=strict).raw_decode(text)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+    return None
+
+
+def _validate_score_object(parsed: dict) -> dict:
     validated = {}
     for field in JUDGE_FIELDS:
         item = parsed.get(field)
@@ -106,6 +174,24 @@ def parse_judge_response(content: str) -> dict:
     return validated
 
 
+def parse_judge_response(content: str) -> dict:
+    """Extract a schema-valid score object from wrapped or lenient JSON output."""
+    text = (content or "").strip().lstrip("\ufeff")
+    errors = []
+    for candidate in _balanced_objects(text):
+        parsed = _decode_candidate(candidate)
+        if parsed is None:
+            continue
+        try:
+            return _validate_score_object(parsed)
+        except ValueError as error:
+            errors.append(str(error))
+    if not text or "{" not in text:
+        raise ValueError("Judge 响应中没有 JSON 对象")
+    detail = errors[-1] if errors else "无法解析 JSON 对象"
+    raise ValueError(f"Judge 响应无法解析为有效评分对象: {detail}")
+
+
 def judge_case(
     case: dict,
     generate: Callable[..., str],
@@ -116,6 +202,7 @@ def judge_case(
     if case.get("status") != "success" or not case.get("actual"):
         return {
             "status": "skipped",
+            "scores": build_unscored_scores("generation_not_successful"),
             "error": "生成案例未成功，无法评价答案质量",
         }
 
@@ -123,5 +210,9 @@ def judge_case(
     raw_response = generate(prompt, operation="eval_judge")
     return {
         "status": "success",
+        "judge_version": JUDGE_VERSION,
+        "prompt_fingerprint": hashlib.sha256(
+            prompt.encode("utf-8")
+        ).hexdigest(),
         "scores": parse_judge_response(raw_response),
     }

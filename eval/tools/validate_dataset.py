@@ -8,7 +8,7 @@ from collections import Counter
 
 import fitz
 
-from eval.core import DATASET_DIR, PDF_DIR, load_json
+from eval.core import DATASET_DIR, PDF_DIR, case_document_keys, load_json
 from eval.metrics.retrieval import (
     evidence_alternatives,
     normalize_evidence_text,
@@ -72,7 +72,7 @@ def validate_document(document: dict, errors: list[str]) -> dict[int, str]:
 
 def validate_evidence(
     case: dict,
-    normalized_pages: dict[int, str],
+    document_pages: dict[str, dict[int, str]],
     *,
     require_gold_evidence: bool,
     errors: list[str],
@@ -110,6 +110,16 @@ def validate_evidence(
             start=1,
         ):
             location = f"{evidence_id} alternative-{index}"
+            case_scope = case_document_keys(case)
+            document_key = alternative.get("document_key")
+            if len(case_scope) > 1:
+                if document_key not in case_scope:
+                    errors.append(
+                        f"{case_id}: {location} document_key 必须属于 document_keys"
+                    )
+                    continue
+            else:
+                document_key = document_key or case_scope[0]
             page = alternative.get("page")
             if page not in gold_pages:
                 errors.append(
@@ -120,7 +130,7 @@ def validate_evidence(
                 errors.append(f"{case_id}: {location} text 不能为空")
             elif (
                 normalize_evidence_text(text)
-                not in normalized_pages.get(page, "")
+                not in document_pages.get(document_key, {}).get(page, "")
             ):
                 errors.append(
                     f"{case_id}: {location} 不在 PDF 第 {page} 页"
@@ -141,7 +151,6 @@ def validate_case(
     case_id = case.get("case_id", "unknown")
     required = {
         "case_id",
-        "document_key",
         "scenario",
         "category",
         "query",
@@ -152,9 +161,14 @@ def validate_case(
     if missing:
         errors.append(f"{case_id}: 缺少字段 {missing}")
         return False
-    document = documents.get(case["document_key"])
-    if document is None:
-        errors.append(f"{case_id}: document_key 不存在")
+    try:
+        document_keys = case_document_keys(case)
+    except ValueError as error:
+        errors.append(f"{case_id}: {error}")
+        return False
+    missing_documents = [key for key in document_keys if key not in documents]
+    if missing_documents:
+        errors.append(f"{case_id}: 未定义文档 {missing_documents}")
         return False
     if case["scenario"] not in ALLOWED_SCENARIOS:
         errors.append(f"{case_id}: 非法 scenario")
@@ -168,6 +182,8 @@ def validate_case(
         errors.append(f"{case_id}: 单轮案例不应包含 history")
     if not case.get("answer_points"):
         errors.append(f"{case_id}: answer_points 不能为空")
+    if not 1 <= case.get("n_results", 3) <= 10:
+        errors.append(f"{case_id}: n_results 必须在 1 到 10 之间")
 
     gold_pages = case.get("gold_pages") or []
     if case["answerable"] and not gold_pages:
@@ -175,12 +191,16 @@ def validate_case(
     if not case["answerable"] and gold_pages:
         errors.append(f"{case_id}: 无答案案例的 gold_pages 应为空")
     for page in gold_pages:
-        if not isinstance(page, int) or not 1 <= page <= document["page_count"]:
+        if not isinstance(page, int) or page < 1:
+            errors.append(f"{case_id}: gold page {page} 非法")
+        elif not any(
+            page <= documents[key]["page_count"] for key in document_keys
+        ):
             errors.append(f"{case_id}: gold page {page} 超出范围")
 
     return validate_evidence(
         case,
-        document_pages.get(case["document_key"], {}),
+        document_pages,
         require_gold_evidence=require_gold_evidence,
         errors=errors,
     )
@@ -209,7 +229,11 @@ def main() -> None:
     case_ids = [case.get("case_id") for case in cases]
     if len(case_ids) != len(set(case_ids)):
         errors.append("case_id 必须唯一")
-    counts = Counter(case.get("document_key") for case in cases)
+    counts = Counter(
+        key
+        for case in cases
+        for key in case_document_keys(case)
+    )
     for key in documents:
         if counts[key] < MIN_CASES_PER_DOCUMENT:
             errors.append(f"{key}: 至少需要 {MIN_CASES_PER_DOCUMENT} 个案例")

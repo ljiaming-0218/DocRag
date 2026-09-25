@@ -18,8 +18,16 @@ from eval.core import (
     save_json,
     utc_now_iso,
 )
-from eval.judges.llm_judge import judge_case
-from eval.metrics.generation import summarize_generation_results
+from eval.judges.llm_judge import (
+    JUDGE_CRITERIA,
+    JUDGE_VERSION,
+    build_unscored_scores,
+    judge_case,
+)
+from eval.metrics.generation import (
+    apply_no_answer_judge_policy,
+    summarize_generation_results,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -100,11 +108,21 @@ def main() -> None:
         "source_generation_run_id": source_data.get("run_id"),
         "source_results_path": str(source_path),
         "dataset_fingerprint": source_data.get("dataset_fingerprint"),
+        "source_generation_snapshot": {
+            "config": source_data.get("config"),
+            "runtime_snapshot": source_data.get("runtime_snapshot"),
+            "evaluation_contract": source_data.get("evaluation_contract"),
+        },
         "config": {
             "case_ids": args.case_ids,
             "request_interval": args.request_interval,
             "max_source_chars": args.max_source_chars,
             "judge_model": judge_model,
+            "judge_version": JUDGE_VERSION,
+            "score_scale": [0.0, 1.0],
+            "unscored_value": None,
+            "criteria": JUDGE_CRITERIA,
+            "applicability_policy": "correct_refusal_without_sources_v1",
         },
         "results": [],
     }
@@ -114,10 +132,13 @@ def main() -> None:
         case = copy.deepcopy(source_case)
         print(f"[{index}/{len(selected)}] {case.get('case_id')}")
         try:
-            case["llm_judge"] = judge_case(
+            case["llm_judge"] = apply_no_answer_judge_policy(
                 case,
-                generate,
-                max_source_chars=args.max_source_chars,
+                judge_case(
+                    case,
+                    generate,
+                    max_source_chars=args.max_source_chars,
+                ),
             )
         except Exception as error:
             logger.exception(
@@ -128,6 +149,7 @@ def main() -> None:
                 "status": "error",
                 "error_type": type(error).__name__,
                 "error": str(error),
+                "scores": build_unscored_scores("judge_failed"),
             }
         judged_data["results"].append(case)
         save_json(judged_data, run_dir / "results.json")
