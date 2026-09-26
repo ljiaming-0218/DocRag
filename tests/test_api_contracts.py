@@ -12,6 +12,7 @@ from api_errors import (
 from routers import (
     auth_router,
     conversation_router,
+    ingestion_job_router,
     pdf_router,
     user_router,
 )
@@ -25,6 +26,7 @@ def client():
     app.include_router(user_router.router)
     app.include_router(conversation_router.router)
     app.include_router(pdf_router.router)
+    app.include_router(ingestion_job_router.router)
     app.add_exception_handler(
         APIError,
         api_error_handler,
@@ -452,15 +454,15 @@ def test_index_pdf_maps_validation_error_to_400(
     client: TestClient,
     monkeypatch,
 ):
-    index_document = AsyncMock(
+    submit_index = AsyncMock(
         side_effect=ValueError(
             "文件内容不是有效的 PDF"
         )
     )
     monkeypatch.setattr(
         pdf_router,
-        "index_document",
-        index_document,
+        "submit_index",
+        submit_index,
     )
 
     response = client.post(
@@ -484,21 +486,21 @@ def test_index_pdf_maps_validation_error_to_400(
         "error": "INVALID_PDF_REQUEST",
         "message": "文件内容不是有效的 PDF",
     }
-    index_document.assert_awaited_once()
+    submit_index.assert_awaited_once()
 
 
 def test_index_pdf_forwards_chunk_strategy(
     client: TestClient,
     monkeypatch,
 ):
-    index_document = AsyncMock(return_value={
-        "document_id": "document-1",
-        "chunk_strategy": "recursive",
-    })
+    submit_index = AsyncMock(return_value=({
+        "job_id": "job-1", "document_id": "document-1",
+        "status": "queued", "stage": "queued", "reused": False,
+    }, 202))
     monkeypatch.setattr(
         pdf_router,
-        "index_document",
-        index_document,
+        "submit_index",
+        submit_index,
     )
 
     response = client.post(
@@ -519,14 +521,16 @@ def test_index_pdf_forwards_chunk_strategy(
         },
     )
 
-    assert response.status_code == 200
-    index_document.assert_awaited_once_with(
+    assert response.status_code == 202
+    assert response.json()["job_id"] == "job-1"
+    submit_index.assert_awaited_once_with(
         user_id="user-1",
         file=ANY,
         chunk_size=500,
         chunk_overlap=50,
         strategy="recursive",
         force_reindex=True,
+        idempotency_key=None,
     )
 
 
@@ -534,13 +538,13 @@ def test_index_pdf_maps_runtime_error_to_500(
     client: TestClient,
     monkeypatch,
 ):
-    index_document = AsyncMock(
+    submit_index = AsyncMock(
         side_effect=RuntimeError("向量数据库写入失败")
     )
     monkeypatch.setattr(
         pdf_router,
-        "index_document",
-        index_document,
+        "submit_index",
+        submit_index,
     )
 
     response = client.post(
@@ -564,22 +568,22 @@ def test_index_pdf_maps_runtime_error_to_500(
         "error": "PDF_OPERATION_FAILED",
         "message": "向量数据库写入失败",
     }
-    index_document.assert_awaited_once()
+    submit_index.assert_awaited_once()
 
 
 def test_index_pdf_maps_activation_conflict_to_409(
     client: TestClient,
     monkeypatch,
 ):
-    index_document = AsyncMock(
+    submit_index = AsyncMock(
         side_effect=pdf_router.IndexActivationConflictError(
             "文档索引在重建期间已被其他任务更新，请重试"
         )
     )
     monkeypatch.setattr(
         pdf_router,
-        "index_document",
-        index_document,
+        "submit_index",
+        submit_index,
     )
 
     response = client.post(

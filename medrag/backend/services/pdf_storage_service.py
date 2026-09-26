@@ -2,6 +2,7 @@ from asyncio import to_thread
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from hashlib import sha256
+from os import link
 from pathlib import Path
 from typing import BinaryIO
 from uuid import uuid4
@@ -50,12 +51,18 @@ def save_pdf_stream(
         f"{result['document_hash']}_{result['文件名']}"
     )
 
-    if save_path.exists():
+    try:
+        # A hard link publishes the fully written file without replacing a
+        # concurrent upload of the same content.
+        link(temp_path, save_path)
+        created_new_file = True
+    except FileExistsError:
+        created_new_file = False
+    finally:
         temp_path.unlink(missing_ok=True)
-    else:
-        temp_path.replace(save_path)
 
     result["保存路径"] = str(save_path)
+    result["created_new_file"] = created_new_file
     return result
 
 

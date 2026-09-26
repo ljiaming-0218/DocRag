@@ -1,4 +1,6 @@
 const USER_STORAGE_KEY = "docrag.currentUser";
+const INGESTION_STORAGE_PREFIX = "docrag.ingestionJobs.";
+const INGESTION_POLL_INTERVAL_MS = 2000;
 
 let currentUser = null;
 let currentDocumentId = "";
@@ -9,6 +11,8 @@ let knowledgeBases = [];
 let knowledgeBaseDocuments = [];
 let selectedKnowledgeBaseDocumentIds = new Set();
 let conversations = [];
+const uploadJobs = new Map();
+let uploadResults = [];
 
 function $(id) {
   return document.getElementById(id);
@@ -161,6 +165,7 @@ async function completeAuthentication(authResult) {
   await loadKnowledgeBases();
   await loadDocuments();
   await loadConversations();
+  resumePendingJobs();
 }
 
 function readCredentials() {
@@ -226,6 +231,9 @@ async function handleRegister() {
 }
 
 function resetUserWorkspace() {
+  for (const job of uploadJobs.values()) clearTimeout(job.timer);
+  uploadJobs.clear();
+  uploadResults = [];
   currentDocumentId = "";
   currentKnowledgeBaseId = "";
   currentConversationId = "";
@@ -962,33 +970,6 @@ function updateUploadProgress(completed, total, filename = "") {
   $("uploadProgressBar").style.width = `${percent}%`;
 }
 
-function renderBatchUploadResults(results) {
-  $("indexResult").innerHTML = `
-    <div class="batch-result-list">
-      ${results
-        .map((result) => {
-          const statusLabel = result.status === "success"
-            ? "成功"
-            : result.status === "partial"
-              ? "部分成功"
-              : "失败";
-          const detail = result.status === "success"
-            ? result.data?.existing_document
-              ? "已复用现有索引"
-              : `已保存 ${result.data?.["成功保存块数"] ?? "-"} 个文本块`
-            : result.error;
-          return `
-            <div class="batch-result-item ${result.status}">
-              <strong title="${escapeHtml(result.file.name)}">${escapeHtml(result.file.name)}</strong>
-              <span>${statusLabel}</span>
-              <small>${escapeHtml(detail || "处理完成")}</small>
-            </div>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
-}
 
 async function requestPdfIndex(userId, file, chunkSize, chunkOverlap) {
   const formData = new FormData();
@@ -1002,102 +983,196 @@ async function requestPdfIndex(userId, file, chunkSize, chunkOverlap) {
     method: "POST",
     body: formData,
   });
-  return parseResponse(response);
+  return { statusCode: response.status, data: await parseResponse(response) };
 }
 
-async function finalizeKnowledgeBaseUpload(
-  user,
-  targetKnowledgeBaseId,
-  successfulResults
-) {
-  currentKnowledgeBaseId = targetKnowledgeBaseId;
-  currentDocumentId = "";
-  selectedKnowledgeBaseDocumentIds = new Set();
-  $("searchDocumentId").value = "";
-  $("newDocumentConversationButton").classList.add("hidden");
-  $("newKnowledgeBaseConversationButton").classList.remove("hidden");
+const INGESTION_STAGE_LABELS = {
+  queued: "等待处理",
+  extracting: "正在解析文档",
+  chunking: "正在切分文档",
+  embedding: "正在生成向量",
+  indexing: "正在建立索引",
+  validating: "正在验证索引",
+  completed: "文档处理完成",
+  failed: "文档处理失败",
+};
 
+function ingestionStorageKey(userId) {
+  return `${INGESTION_STORAGE_PREFIX}${userId}`;
+}
+
+function persistPendingJobs() {
+  if (!currentUser?.user_id) return;
+  const pending = [...uploadJobs.values()]
+    .filter((job) => !["completed", "failed"].includes(job.status))
+    .map(({ jobId, documentId, filename, kbId, status, stage, progress, autoOpen }) => ({
+      jobId, documentId, filename, kbId, status, stage, progress, autoOpen,
+    }));
+  const key = ingestionStorageKey(currentUser.user_id);
+  if (pending.length) localStorage.setItem(key, JSON.stringify(pending));
+  else localStorage.removeItem(key);
+}
+
+function renderIngestionStatus() {
+  const entries = [...uploadResults, ...uploadJobs.values()];
+  $("indexResult").innerHTML = entries.length ? `
+    <div class="batch-result-list">
+      ${entries.map((entry) => {
+        const stageText = entry.status === "unavailable"
+          ? "任务状态暂时无法获取，请稍后重试"
+          : entry.status === "upload_error"
+            ? "上传失败"
+            : INGESTION_STAGE_LABELS[entry.status === "failed" ? "failed" : entry.stage]
+              || "等待处理";
+        const progress = entry.progress != null && Number.isFinite(Number(entry.progress))
+          ? Math.max(0, Math.min(100, Number(entry.progress)))
+          : null;
+        const finished = ["completed", "failed", "upload_error"].includes(entry.status);
+        return `
+          <div class="batch-result-item ${entry.status === "failed" || entry.status === "upload_error" ? "error" : finished ? "success" : ""}">
+            <strong title="${escapeHtml(entry.filename)}">${escapeHtml(entry.filename)}</strong>
+            <span>${escapeHtml(stageText)}</span>
+            ${progress === null || entry.status === "upload_error" ? "" : `
+              <div class="ingestion-track" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100">
+                <span style="width: ${progress}%"></span>
+              </div>
+              <small>${progress}%</small>
+            `}
+            ${entry.error ? `<small>${escapeHtml(entry.error)}</small>` : ""}
+            ${entry.status === "failed" ? `<button type="button" data-retry-job-id="${escapeHtml(entry.jobId)}">重新处理</button>` : ""}
+            ${entry.status === "unavailable" ? `<button type="button" data-refresh-job-id="${escapeHtml(entry.jobId)}">重新查询</button>` : ""}
+          </div>`;
+      }).join("")}
+    </div>` : "";
+}
+
+function scheduleJobPoll(job) {
+  clearTimeout(job.timer);
+  if (["completed", "failed", "unavailable"].includes(job.status)) return;
+  job.timer = setTimeout(() => pollUploadJob(job), INGESTION_POLL_INTERVAL_MS);
+}
+
+async function finishUploadJob(job) {
+  if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
   await loadDocuments();
-  await loadKnowledgeBases();
-  await loadKnowledgeBaseDocuments(targetKnowledgeBaseId);
+  if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
+  if (job.kbId) {
+    try {
+      await linkDocumentToKnowledgeBase(job.kbId, job.documentId);
+      if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
+      if (currentKnowledgeBaseId === job.kbId) {
+        await loadKnowledgeBaseDocuments(job.kbId);
+      }
+    } catch (error) {
+      job.error = `文档已可用，但加入知识库失败：${error.message}`;
+    }
+  }
+  if (job.autoOpen && !currentConversationId && !currentDocumentId
+      && (!currentKnowledgeBaseId || currentKnowledgeBaseId === job.kbId)
+      && (!job.kbId || !job.error)) {
+    try {
+      if (job.kbId) await selectKnowledgeBase(job.kbId);
+      else await selectDocument(job.documentId);
+      if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
+      const scope = job.kbId
+        ? { kb_id: job.kbId }
+        : { document_id: job.documentId };
+      const title = job.kbId
+        ? getKnowledgeBaseName(job.kbId)
+        : job.filename.replace(/\.pdf$/i, "");
+      const conversation = await createConversation(job.userId, scope, title);
+      if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
+      currentConversationId = conversation.conversation_id;
+      $("answerConversationId").value = currentConversationId;
+      updateContextText(conversation);
+      await loadConversations();
+    } catch (error) {
+      job.error = `文档已可用，但创建会话失败：${error.message}`;
+    }
+  }
+  renderIngestionStatus();
+}
 
-  const hasNewContent = successfulResults.some(
-    (result) => result.linkResult?.linked || !result.data.existing_document
-  );
-  if (hasNewContent) {
-    const conversation = await createConversation(
-      user.user_id,
-      { kb_id: targetKnowledgeBaseId },
-      getKnowledgeBaseName(targetKnowledgeBaseId)
+async function pollUploadJob(job) {
+  if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
+  clearTimeout(job.timer);
+  job.timer = null;
+  try {
+    const response = await authorizedFetch(
+      `${getApiBase()}/ingestion-jobs/${encodeURIComponent(job.jobId)}`
     );
-    currentConversationId = conversation.conversation_id;
-    $("answerConversationId").value = currentConversationId;
-    $("answerResult").innerHTML = "";
-    $("emptyState").classList.remove("hidden");
-    updateContextText(conversation);
-  } else {
-    currentConversationId = "";
-    $("answerConversationId").value = "";
-    updateContextText({
-      title: getKnowledgeBaseName(targetKnowledgeBaseId),
-      kb_id: targetKnowledgeBaseId,
-    });
+    const data = await parseResponse(response);
+    if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
+    job.status = data.status;
+    job.stage = data.stage;
+    job.progress = data.progress;
+    job.error = data.status === "failed" ? data.error_message || data.error_code || "处理失败" : "";
+    job.queryFailures = 0;
+    persistPendingJobs();
+    renderIngestionStatus();
+    if (data.status === "completed") {
+      await finishUploadJob(job);
+    } else if (data.status !== "failed") {
+      scheduleJobPoll(job);
+    }
+  } catch (error) {
+    if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
+    job.queryFailures = (job.queryFailures || 0) + 1;
+    if (job.queryFailures >= 3) {
+      job.status = "unavailable";
+      job.error = "任务状态暂时无法获取，请稍后重试。";
+    } else {
+      scheduleJobPoll(job);
+    }
+    persistPendingJobs();
+    renderIngestionStatus();
   }
-
-  renderKnowledgeBaseList();
-  renderDocumentList();
-  await loadConversations();
 }
 
-async function finalizeStandaloneUpload(user, successfulResults) {
-  const lastResult = successfulResults.at(-1);
-  if (!lastResult) return;
-
-  currentKnowledgeBaseId = "";
-  knowledgeBaseDocuments = [];
-  selectedKnowledgeBaseDocumentIds = new Set();
-  $("newKnowledgeBaseConversationButton").classList.add("hidden");
-  renderKnowledgeBaseList();
-  renderKnowledgeBaseDocuments();
-  await loadDocuments();
-
-  currentDocumentId = lastResult.data.document_id || "";
-  $("searchDocumentId").value = currentDocumentId;
-  $("newDocumentConversationButton").classList.remove("hidden");
-
-  if (successfulResults.length > 1) {
-    await selectDocument(currentDocumentId);
-    return;
+async function retryUploadJob(job) {
+  if (!job || uploadJobs.get(job.jobId) !== job
+      || currentUser?.user_id !== job.userId) return;
+  try {
+    const response = await authorizedFetch(
+      `${getApiBase()}/ingestion-jobs/${encodeURIComponent(job.jobId)}/retry`,
+      { method: "POST" }
+    );
+    const data = await parseResponse(response);
+    if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
+    job.status = data.status;
+    job.stage = data.stage;
+    job.progress = data.progress;
+    job.error = "";
+    job.queryFailures = 0;
+    persistPendingJobs();
+    renderIngestionStatus();
+    pollUploadJob(job);
+  } catch (error) {
+    if (uploadJobs.get(job.jobId) !== job || currentUser?.user_id !== job.userId) return;
+    job.error = `重试请求失败：${error.message}`;
+    renderIngestionStatus();
   }
-
-  if (lastResult.data.existing_document) {
-    currentConversationId = "";
-    $("answerConversationId").value = "";
-    $("answerResult").innerHTML = "";
-    $("emptyState").classList.remove("hidden");
-    conversations = Array.isArray(lastResult.data.conversations)
-      ? lastResult.data.conversations
-      : [];
-    renderConversationList();
-    renderDocumentList();
-    updateContextText(null);
-    return;
-  }
-
-  const conversation = await createConversation(
-    user.user_id,
-    { document_id: currentDocumentId },
-    lastResult.file.name.replace(/\.pdf$/i, "")
-  );
-  currentConversationId = conversation.conversation_id;
-  $("answerUserType").value =
-    conversation.user_type || user.default_user_type || "general";
-  $("answerConversationId").value = currentConversationId;
-  $("answerResult").innerHTML = "";
-  $("emptyState").classList.remove("hidden");
-  updateContextText(conversation);
-  await loadConversations();
 }
+
+function resumePendingJobs() {
+  if (!currentUser?.user_id) return;
+  let saved;
+  try {
+    saved = JSON.parse(localStorage.getItem(ingestionStorageKey(currentUser.user_id)) || "[]");
+  } catch {
+    saved = [];
+  }
+  if (!Array.isArray(saved)) saved = [];
+  for (const item of saved) {
+    if (!item?.jobId || !item.documentId || uploadJobs.has(item.jobId)) continue;
+    const job = { ...item, userId: currentUser.user_id, timer: null, queryFailures: 0, error: "" };
+    uploadJobs.set(job.jobId, job);
+    pollUploadJob(job);
+  }
+  persistPendingJobs();
+  renderIngestionStatus();
+}
+
 
 async function indexPdf() {
   const user = requireUser();
@@ -1112,17 +1187,15 @@ async function indexPdf() {
     setStatus("indexStatus", "请至少选择一个 PDF 文件。", "error");
     return;
   }
-
-  const invalidFile = files.find(
-    (file) => !file.name.toLowerCase().endsWith(".pdf")
-  );
+  const invalidFile = files.find((file) => !file.name.toLowerCase().endsWith(".pdf"));
   if (invalidFile) {
     setStatus("indexStatus", `${invalidFile.name} 不是 PDF 文件。`, "error");
     return;
   }
 
   clearStatus("indexStatus");
-  $("indexResult").innerHTML = "";
+  uploadResults = [];
+  renderIngestionStatus();
   button.disabled = true;
   fileInput.disabled = true;
   $("uploadKnowledgeBaseSelect").disabled = true;
@@ -1130,90 +1203,76 @@ async function indexPdf() {
   $("chunkOverlap").disabled = true;
   updateUploadProgress(0, files.length, files[0].name);
 
-  const results = [];
-  for (const [index, file] of files.entries()) {
-    button.textContent = `正在索引 ${index + 1} / ${files.length}`;
-    updateUploadProgress(index, files.length, file.name);
-    try {
-      const data = await requestPdfIndex(
-        user.user_id,
-        file,
-        chunkSize,
-        chunkOverlap
-      );
-      const result = { file, data, status: "success", linkResult: null };
-
-      if (targetKnowledgeBaseId) {
-        try {
-          result.linkResult = await linkDocumentToKnowledgeBase(
-            targetKnowledgeBaseId,
-            data.document_id
-          );
-        } catch (error) {
-          result.status = "partial";
-          result.error = `索引成功，但加入知识库失败：${error.message}`;
-        }
-      }
-      results.push(result);
-    } catch (error) {
-      results.push({ file, status: "error", error: error.message });
-    }
-    updateUploadProgress(index + 1, files.length, file.name);
-  }
-
-  const indexedResults = results.filter(
-    (result) => result.status !== "error"
-  );
-  const scopedResults = results.filter(
-    (result) => result.status === "success"
-  );
-
+  let submitted = 0;
   try {
-    if (targetKnowledgeBaseId && scopedResults.length) {
-      await finalizeKnowledgeBaseUpload(
-        user,
-        targetKnowledgeBaseId,
-        scopedResults
-      );
-    } else if (!targetKnowledgeBaseId && indexedResults.length) {
-      await finalizeStandaloneUpload(user, indexedResults);
-    } else {
-      await loadDocuments();
+    for (const [index, file] of files.entries()) {
+      button.textContent = `正在提交 ${index + 1} / ${files.length}`;
+      try {
+        const { statusCode, data } = await requestPdfIndex(
+          user.user_id, file, chunkSize, chunkOverlap
+        );
+        if (currentUser?.user_id !== user.user_id) return;
+        if (statusCode === 200) {
+          uploadResults.push({
+            filename: file.name, status: "completed", stage: "completed",
+            progress: 100, error: "",
+          });
+          await loadDocuments();
+          if (currentUser?.user_id !== user.user_id) return;
+          if (targetKnowledgeBaseId) {
+            try {
+              await linkDocumentToKnowledgeBase(targetKnowledgeBaseId, data.document_id);
+              if (currentUser?.user_id !== user.user_id) return;
+              if (currentKnowledgeBaseId === targetKnowledgeBaseId) {
+                await loadKnowledgeBaseDocuments(targetKnowledgeBaseId);
+              }
+            } catch (error) {
+              uploadResults.at(-1).error = `文档已可用，但加入知识库失败：${error.message}`;
+            }
+          }
+        } else if (statusCode === 202 && data.job_id && data.document_id) {
+          const existing = uploadJobs.get(data.job_id);
+          if (!existing) {
+            const job = {
+              jobId: data.job_id, documentId: data.document_id,
+              userId: user.user_id, filename: file.name,
+              kbId: targetKnowledgeBaseId, status: data.status,
+              stage: data.stage, progress: 0, error: "",
+              autoOpen: files.length === 1,
+              queryFailures: 0, timer: null,
+            };
+            uploadJobs.set(job.jobId, job);
+            persistPendingJobs();
+            pollUploadJob(job);
+          }
+        } else {
+          throw new Error("上传接口返回了无法识别的任务状态");
+        }
+        submitted += 1;
+      } catch (error) {
+        if (currentUser?.user_id !== user.user_id) return;
+        uploadResults.push({
+          filename: file.name, status: "upload_error", error: error.message,
+        });
+      }
+      renderIngestionStatus();
+      updateUploadProgress(index + 1, files.length, file.name);
     }
-  } catch (error) {
-    results.push({
-      file: { name: "上传后状态同步" },
-      status: "partial",
-      error: error.message,
-    });
   } finally {
-    renderBatchUploadResults(results);
-    updateUploadProgress(files.length, files.length);
-    const failedCount = results.filter(
-      (result) => result.status === "error"
-    ).length;
-    const partialCount = results.filter(
-      (result) => result.status === "partial"
-    ).length;
-    const completedCount = files.length - failedCount;
-    const reusedSingleFile = files.length === 1
-      && indexedResults[0]?.data?.existing_document;
-    const statusType = failedCount === files.length
-      ? "error"
-      : failedCount || partialCount
-        ? "info"
-        : "success";
-    setStatus(
-      "indexStatus",
-      `${reusedSingleFile ? "检测到该文件已经索引，已复用现有资源。" : ""}批量处理完成：${completedCount} 个已索引，${failedCount} 个失败${partialCount ? `，${partialCount} 个未完成知识库关联` : ""}。`,
-      statusType
-    );
-    button.disabled = false;
-    fileInput.disabled = false;
-    $("uploadKnowledgeBaseSelect").disabled = false;
-    $("chunkSize").disabled = false;
-    $("chunkOverlap").disabled = false;
-    renderSelectedPdfFiles();
+    if (currentUser?.user_id === user.user_id) {
+      button.disabled = false;
+      fileInput.disabled = false;
+      $("uploadKnowledgeBaseSelect").disabled = false;
+      $("chunkSize").disabled = false;
+      $("chunkOverlap").disabled = false;
+      renderSelectedPdfFiles();
+      $("uploadProgressText").textContent = "上传提交完成，文档在后台处理中";
+      setStatus(
+        "indexStatus",
+        `已提交 ${submitted} / ${files.length} 份文档；请在下方查看各自处理状态。`,
+        submitted === files.length ? "success" : "info"
+      );
+    }
   }
 }
 
@@ -1354,6 +1413,22 @@ function bindEvents() {
     handleCreateKnowledgeBase
   );
   $("indexButton").addEventListener("click", indexPdf);
+  $("indexResult").addEventListener("click", (event) => {
+    const retry = event.target.closest("[data-retry-job-id]");
+    if (retry) {
+      retryUploadJob(uploadJobs.get(retry.dataset.retryJobId));
+      return;
+    }
+    const refresh = event.target.closest("[data-refresh-job-id]");
+    if (refresh) {
+      const job = uploadJobs.get(refresh.dataset.refreshJobId);
+      if (!job) return;
+      job.status = "queued";
+      job.error = "";
+      job.queryFailures = 0;
+      pollUploadJob(job);
+    }
+  });
   $("pdfFile").addEventListener("change", renderSelectedPdfFiles);
   $("searchButton").addEventListener("click", searchChunks);
   $("answerButton").addEventListener("click", answerQuestion);
@@ -1416,9 +1491,14 @@ async function initApp() {
     await loadKnowledgeBases();
     await loadDocuments();
     await loadConversations();
+    resumePendingJobs();
   } catch {
     logout();
   }
 }
+
+window.addEventListener("beforeunload", () => {
+  for (const job of uploadJobs.values()) clearTimeout(job.timer);
+});
 
 initApp();

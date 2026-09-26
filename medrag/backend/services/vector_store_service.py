@@ -445,6 +445,31 @@ def delete_index_generation(
         _raise_chroma_error("清理失败索引代次", exc)
     return len(generation_ids)
 
+
+def verify_index_generation(
+    user_id: str,
+    document_id: str,
+    index_generation_id: str,
+    chunks: list[dict],
+) -> None:
+    """Verify the exact generation before making it active."""
+    expected_ids = {build_chunk_id(chunk) for chunk in chunks}
+    if not expected_ids or len(expected_ids) != len(chunks):
+        raise RuntimeError("Index generation has no valid unique chunk IDs")
+
+    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    collection = client.get_collection(name=COLLECTION_NAME)
+    result = collection.get(
+        where=_build_document_scope_filter(
+            user_id,
+            [document_id],
+            {document_id: index_generation_id},
+        ),
+        include=[],
+    )
+    if set(result.get("ids", [])) != expected_ids:
+        raise RuntimeError("Index generation validation failed")
+
 def verify_chunk_ids(
     collection,
     expected_ids: set[str],

@@ -2,13 +2,14 @@ import logging
 from asyncio import to_thread
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Header, Response, UploadFile
 
 from api_errors import APIError
 from dependencies.auth import get_current_user_id, require_matching_user
 from services.chunk_validation_service import validate_chunk_params
 from services.llm_service import LLMServiceError, generate_answer
 from services.document_service import (
+    DocumentIndexUnavailableError,
     DocumentNotReadyError,
     IndexActivationConflictError,
     ensure_document_ready,
@@ -20,10 +21,9 @@ from services.text_splitter_service import (
     split_pages,
 )
 
-from services.document_ingestion_service import (
-    index_document,
-    preview_pdf_pages,
-)
+from services.document_ingestion_service import preview_pdf_pages
+from services.ingestion_job_service import IdempotencyConflictError
+from services.ingestion_submission_service import submit_index
 from services.search_service import search_relevant_chunks
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,12 @@ router = APIRouter(
 
 
 def raise_pdf_error(error: Exception) -> None:
+    if isinstance(error, DocumentIndexUnavailableError):
+        raise APIError(
+            status_code=409,
+            code="DOCUMENT_INDEX_UNAVAILABLE",
+            message=str(error),
+        ) from error
     if isinstance(error, IndexActivationConflictError):
         raise APIError(
             status_code=409,
@@ -108,22 +114,29 @@ async def search_pdf(
 async def index_pdfs(
     user_id: str,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
+    response: Response,
     file: UploadFile = File(...),
     chunk_size: int = 500,
     chunk_overlap: int = 50,
     strategy: str = DEFAULT_CHUNK_STRATEGY,
     force_reindex: bool = False,
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> dict:
     try:
         user_id = require_matching_user(authenticated_user_id, user_id)
-        return await index_document(
+        payload, status_code = await submit_index(
             user_id=user_id,
             file=file,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             strategy=strategy,
             force_reindex=force_reindex,
+            idempotency_key=idempotency_key,
         )
+        response.status_code = status_code
+        return payload
+    except IdempotencyConflictError as error:
+        raise APIError(409, "IDEMPOTENCY_CONFLICT", str(error)) from error
     except (ValueError, RuntimeError) as error:
         raise_pdf_error(error)
 

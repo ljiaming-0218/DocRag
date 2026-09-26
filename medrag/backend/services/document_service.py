@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from uuid import uuid4
+from pymongo.errors import DuplicateKeyError
 
 from services.user_service import get_existing_user
 from stores.document_store import (
@@ -21,6 +22,7 @@ PROCESSING_STAGES = {
     "chunking",
     "embedding",
     "indexing",
+    "validating",
     "completed",
 }
 
@@ -135,7 +137,14 @@ async def get_or_create_document(user_id, filename, document_hash) -> dict:
             "processing_started_at": None,
             "processed_at": None,
         }
-        await insert_document(document)
+        try:
+            await insert_document(document)
+        except DuplicateKeyError:
+            # A concurrent upload of the same content won the unique index.
+            document = await find_document_by_user_and_hash(user_id, document_hash)
+            if document is None:
+                raise
+            existing_document = True
         return {
             "document_id": document["_id"],
             "user_id": document["user_id"],
@@ -257,6 +266,8 @@ async def activate_document_index_generation(
     index_fingerprint: str,
     index_config: dict,
     indexed_at: datetime,
+    *,
+    session=None,
 ) -> None:
     activated = await compare_and_set_document_index_generation(
         user_id=user_id,
@@ -266,6 +277,7 @@ async def activate_document_index_generation(
         index_fingerprint=index_fingerprint,
         index_config=index_config,
         indexed_at=indexed_at,
+        **({"session": session} if session is not None else {}),
     )
     if not activated:
         raise IndexActivationConflictError(

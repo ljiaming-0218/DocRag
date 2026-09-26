@@ -46,7 +46,7 @@ DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目�
 - 计算 PDF 内容的 SHA-256 `document_hash`。
 - 通过 `user_id + document_hash` 识别同一用户重复上传的相同文件，避免重复解析和索引。
 - 根据切片参数、切片版本、Embedding 模型和索引版本生成 `index_fingerprint`；只有指纹一致才复用旧索引。
-- `/pdf/index` 支持 `force_reindex=true`，用于忽略旧指纹并强制重建同一 `document_id` 的向量索引。
+- `/pdf/index` 接受上传后创建持久化索引任务并返回 `202 + job_id`；有效索引可直接复用并返回 `200`。支持 `Idempotency-Key` 和 `force_reindex=true`。
 - 每次重建生成独立 `index_generation_id`，新代次完整写入并验证后通过 compare-and-set 切换 MongoDB 中的 active generation；并发冲突时清理未激活代次，Dense 与 BM25 检索只读取当前 active 版本。
 - 对疑似扫描页支持可选的 Tesseract 中英文 OCR 回退。
 - 记录文档主要语言，用于跨语言 Query Rewrite。
@@ -372,7 +372,9 @@ set TRANSFORMERS_OFFLINE=1
 | `GET /auth/me` | 根据 JWT 获取当前用户信息 |
 | `POST /pdf/parse` | 临时解析 PDF 并返回分页文本；响应后删除临时文件，不创建 Document 或索引 |
 | `POST /pdf/chunks` | 临时预览切分结果；不写入 MongoDB 或 Chroma |
-| `POST /pdf/index` | 去重、解析、版本化切分、向量化并建立索引；支持 `force_reindex` |
+| `POST /pdf/index` | 保存 PDF 并提交索引任务；新任务返回 `202 + job_id`，有效索引复用返回 `200`；支持 `Idempotency-Key` 和 `force_reindex` |
+| `GET /ingestion-jobs/{job_id}` | 查询所属用户的索引任务状态、进度和错误 |
+| `POST /ingestion-jobs/{job_id}/retry` | 将失败且未超过重试次数的任务重新入队 |
 | `POST /pdf/search` | 调试指定用户和文档的检索结果 |
 | `POST /pdf/prompt-preview` | 预览单轮 RAG Prompt |
 | `POST /pdf/answer` | 单轮 RAG 问答兼容接口 |

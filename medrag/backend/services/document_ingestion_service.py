@@ -2,6 +2,7 @@ import logging
 import hashlib
 import json
 from asyncio import to_thread
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
@@ -48,7 +49,12 @@ STAGE_ERROR_CODES = {
     "chunking": "CHUNK_FAILED",
     "embedding": "EMBEDDING_FAILED",
     "indexing": "VECTOR_WRITE_FAILED",
+    "validating": "INDEX_VALIDATION_FAILED",
 }
+
+
+class IndexOwnershipLostError(RuntimeError):
+    """The ingestion job no longer owns its lease."""
 
 
 def log_processing_stage(
@@ -162,11 +168,19 @@ async def prepare_document(user_id: str, file: UploadFile) -> dict:
 
 async def index_document(
     user_id: str,
-    file: UploadFile,
+    file: UploadFile | None,
     chunk_size: int,
     chunk_overlap: int,
     strategy: str | None = DEFAULT_CHUNK_STRATEGY,
     force_reindex: bool = False,
+    *,
+    prepared_context: dict | None = None,
+    generation_id: str | None = None,
+    on_stage: Callable[[str, int], Awaitable[None]] | None = None,
+    validate_generation: Callable[[str, str, str, list[dict]], Awaitable[None]] | None = None,
+    before_activate: Callable[[], Awaitable[None]] | None = None,
+    activate_generation: Callable[..., Awaitable[None]] | None = None,
+    include_history: bool = True,
 ) -> dict:
     user = await get_existing_user(user_id)
     validate_chunk_params(chunk_size, chunk_overlap)
@@ -177,7 +191,11 @@ async def index_document(
         chunk_overlap,
     )
     index_fingerprint = build_index_fingerprint(index_config)
-    context = await prepare_document(user_id, file)
+    context = (
+        prepared_context
+        if prepared_context is not None
+        else await prepare_document(user_id, file)
+    )
 
     existing_chunks = False
     if context["existing_document"]:
@@ -211,7 +229,7 @@ async def index_document(
             user_id=user["user_id"],
             document_id=context["document_id"],
             limit=50,
-        )
+        ) if include_history else []
 
         if document_language == "unknown":
             try:
@@ -257,13 +275,15 @@ async def index_document(
         }
 
     current_stage = "parsing"
-    index_generation_id = str(uuid4())
+    index_generation_id = generation_id or str(uuid4())
     expected_active_generation_id = context.get(
         "active_index_generation_id"
     )
     generation_activated = False
     processing_started_at = perf_counter()
     try:
+        if on_stage is not None:
+            await on_stage("extracting", 5)
         await set_document_processing_state(
             user["user_id"],
             context["document_id"],
@@ -296,6 +316,8 @@ async def index_document(
         )
 
         current_stage = "chunking"
+        if on_stage is not None:
+            await on_stage("chunking", 25)
         await set_document_processing_state(
             user["user_id"],
             context["document_id"],
@@ -339,6 +361,8 @@ async def index_document(
         )
 
         current_stage = "embedding"
+        if on_stage is not None:
+            await on_stage("embedding", 50)
         await set_document_processing_state(
             user["user_id"],
             context["document_id"],
@@ -359,6 +383,8 @@ async def index_document(
         )
 
         current_stage = "indexing"
+        if on_stage is not None:
+            await on_stage("indexing", 75)
         await set_document_processing_state(
             user["user_id"],
             context["document_id"],
@@ -372,8 +398,25 @@ async def index_document(
                 "向量写入数量不完整: "
                 f"expected={len(embedded_chunks)}, actual={saved_count}"
             )
+        if on_stage is not None:
+            current_stage = "validating"
+            await on_stage("validating", 95)
+            await set_document_processing_state(
+                user["user_id"],
+                context["document_id"],
+                "processing",
+                current_stage,
+            )
+        if validate_generation is not None:
+            await validate_generation(
+                user["user_id"], context["document_id"],
+                index_generation_id, embedded_chunks,
+            )
+        if before_activate is not None:
+            await before_activate()
         indexed_at = datetime.now(timezone.utc)
-        await activate_document_index_generation(
+        activation = activate_generation or activate_document_index_generation
+        await activation(
             user_id=user["user_id"],
             document_id=context["document_id"],
             expected_active_generation_id=(
@@ -413,7 +456,7 @@ async def index_document(
         )
     except Exception as exc:
         error_code = STAGE_ERROR_CODES[current_stage]
-        if current_stage == "indexing" and not generation_activated:
+        if current_stage in {"indexing", "validating"} and not generation_activated:
             try:
                 await to_thread(
                     delete_index_generation,
@@ -429,15 +472,17 @@ async def index_document(
                     context["document_id"],
                     index_generation_id,
                 )
-        if isinstance(exc, IndexActivationConflictError):
+        if isinstance(exc, (IndexActivationConflictError, IndexOwnershipLostError)):
             logger.warning(
-                "index_generation_activation_conflict "
+                "index_generation_not_activated "
                 "user_id=%s document_id=%s generation_id=%s",
                 user["user_id"],
                 context["document_id"],
                 index_generation_id,
             )
             raise
+        if before_activate is not None:
+            await before_activate()
         try:
             await set_document_processing_state(
                 user["user_id"],
@@ -468,7 +513,7 @@ async def index_document(
         raise
 
     history = []
-    if context["existing_document"]:
+    if context["existing_document"] and include_history:
         history = await list_conversations(
             user_id=user["user_id"],
             document_id=context["document_id"],

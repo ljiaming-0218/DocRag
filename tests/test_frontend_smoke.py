@@ -53,6 +53,8 @@ def json_response(route: Route, data, status: int = 200):
 def test_frontend_complete_smoke(tmp_path: Path):
     errors = []
     index_calls = 0
+    job_polls = 0
+    index_completed = False
     document = {
         "document_id": "document-smoke",
         "filename": "smoke.pdf",
@@ -73,7 +75,7 @@ def test_frontend_complete_smoke(tmp_path: Path):
     }
 
     def handle(route: Route):
-        nonlocal index_calls
+        nonlocal index_calls, job_polls, index_completed
         request = route.request
         url = request.url
 
@@ -88,21 +90,28 @@ def test_frontend_complete_smoke(tmp_path: Path):
                 },
             })
         if "/users/user-smoke/documents" in url:
-            return json_response(route, [document] if index_calls else [])
+            return json_response(route, [document] if index_completed else [])
         if "/knowledge-bases?" in url and request.method == "GET":
             return json_response(route, [])
         if "/pdf/index" in url:
             index_calls += 1
             return json_response(route, {
+                "job_id": "job-smoke" if index_calls == 1 else None,
                 "document_id": "document-smoke",
-                "document_hash": "hash-smoke",
-                "existing_document": index_calls > 1,
-                "conversations": [conversation] if index_calls > 1 else [],
-                "文件名": "smoke.pdf",
-                "总页数": 1,
-                "总块数": 1,
-                "成功保存块数": 1,
-                "message": "PDF 索引完成。",
+                "status": "queued" if index_calls == 1 else "completed",
+                "stage": "queued" if index_calls == 1 else "completed",
+                "reused": index_calls > 1,
+            }, 202 if index_calls == 1 else 200)
+        if url.endswith("/ingestion-jobs/job-smoke"):
+            job_polls += 1
+            stage = "completed" if job_polls >= 2 else "embedding"
+            index_completed = stage == "completed"
+            return json_response(route, {
+                "job_id": "job-smoke",
+                "document_id": "document-smoke",
+                "status": "completed" if index_completed else "running",
+                "stage": stage,
+                "progress": 100 if index_completed else 50,
             })
         if url.endswith("/conversations") and request.method == "POST":
             return json_response(route, conversation, 201)
@@ -241,15 +250,18 @@ def test_frontend_knowledge_base_smoke(tmp_path: Path):
             })
         if "/pdf/index" in url:
             return json_response(route, {
+                "job_id": "job-kb-smoke",
                 "document_id": "document-smoke",
-                "document_hash": "hash-smoke",
-                "existing_document": False,
-                "conversations": [],
-                "文件名": "rag.pdf",
-                "总页数": 2,
-                "总块数": 4,
-                "成功保存块数": 4,
-                "message": "PDF 索引完成。",
+                "status": "queued",
+                "stage": "queued",
+            }, 202)
+        if url.endswith("/ingestion-jobs/job-kb-smoke"):
+            return json_response(route, {
+                "job_id": "job-kb-smoke",
+                "document_id": "document-smoke",
+                "status": "completed",
+                "stage": "completed",
+                "progress": 100,
             })
         if url.endswith("/conversations") and request.method == "POST":
             payload = request.post_data_json
@@ -452,15 +464,19 @@ def test_frontend_multi_pdf_upload_is_sequential(tmp_path: Path):
         if "/pdf/index" in url:
             index_calls += 1
             return json_response(route, {
+                "job_id": f"job-{index_calls}",
                 "document_id": f"document-{index_calls}",
-                "document_hash": f"hash-{index_calls}",
-                "existing_document": False,
-                "conversations": [],
-                "文件名": f"paper-{index_calls}.pdf",
-                "总页数": 1,
-                "总块数": 1,
-                "成功保存块数": 1,
-                "message": "indexed",
+                "status": "queued",
+                "stage": "queued",
+            }, 202)
+        if "/ingestion-jobs/job-" in url:
+            index = int(url.rsplit("-", 1)[-1])
+            return json_response(route, {
+                "job_id": f"job-{index}",
+                "document_id": f"document-{index}",
+                "status": "running",
+                "stage": "embedding" if index == 1 else "chunking",
+                "progress": 50 if index == 1 else 25,
             })
         if url.endswith("/conversations") and request.method == "POST":
             conversation_creations += 1

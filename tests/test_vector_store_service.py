@@ -692,3 +692,30 @@ def test_get_chunks_by_documents_rejects_invalid_scope(
         service.get_chunks_by_documents(user_id, document_ids)
 
     persistent_client.assert_not_called()
+
+
+def test_verify_index_generation_requires_exact_scoped_chunk_ids(monkeypatch):
+    chunk = make_chunk(index_generation_id="generation-new")
+    chunk_id = service.build_chunk_id(chunk)
+    collection = FakeCollection(existing_ids={chunk_id})
+    collection.get = Mock(wraps=collection.get)
+    install_fake_chroma(monkeypatch, collection)
+
+    service.verify_index_generation(
+        "user-1", "document-1", "generation-new", [chunk]
+    )
+    assert collection.get.call_args.kwargs["where"] == {
+        "$and": [
+            {"user_id": "user-1"},
+            {"$and": [
+                {"document_id": "document-1"},
+                {"index_generation_id": "generation-new"},
+            ]},
+        ]
+    }
+
+    collection.ids.add("unexpected-chunk")
+    with pytest.raises(RuntimeError, match="validation failed"):
+        service.verify_index_generation(
+            "user-1", "document-1", "generation-new", [chunk]
+        )

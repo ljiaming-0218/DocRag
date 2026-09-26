@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +20,8 @@ from stores.message_store import create_message_indexes
 from stores.conversation_store import create_conversation_indexes
 from stores.document_store import create_document_indexes
 from stores.knowledge_base_store import create_knowledge_base_indexes
+from stores.ingestion_job_store import create_ingestion_job_indexes
+from services.ingestion_worker_loop import run_worker_loop
 
 from config import APP_VERSION, BUILD_COMMIT, FRONTEND_DIR
 
@@ -26,9 +30,12 @@ from routers.conversation_router import router as conversation_router
 from routers.pdf_router import router as pdf_router
 from routers.knowledge_base_router import router as knowledge_base_router
 from routers.auth_router import router as auth_router
+from routers.ingestion_job_router import router as ingestion_job_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    stop_worker = asyncio.Event()
+    worker_task = None
     try:
         ensure_runtime_directories()
         await connect_database()
@@ -37,9 +44,16 @@ async def lifespan(app: FastAPI):
         await create_user_indexes()
         await create_document_indexes()
         await create_knowledge_base_indexes()
+        await create_ingestion_job_indexes()
+        worker_task = asyncio.create_task(run_worker_loop(stop_worker))
         yield
     finally:
-        await close_database()
+        stop_worker.set()
+        try:
+            if worker_task is not None:
+                await worker_task
+        finally:
+            await close_database()
 
 
 app = FastAPI(
@@ -72,6 +86,7 @@ app.include_router(conversation_router)
 app.include_router(user_router)
 app.include_router(knowledge_base_router)
 app.include_router(auth_router)
+app.include_router(ingestion_job_router)
 
 @app.get("/health")
 def health_check() -> dict:

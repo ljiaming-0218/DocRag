@@ -7,26 +7,13 @@ INDEX_HTML = ROOT_DIR / "medrag" / "frontend" / "index.html"
 STYLES_CSS = ROOT_DIR / "medrag" / "frontend" / "styles.css"
 
 
-def test_upload_finalizers_do_not_read_conversation_before_creation():
+def test_async_upload_uses_job_status_contract():
     source = APP_JS.read_text(encoding="utf-8")
 
-    for function_name in (
-        "finalizeKnowledgeBaseUpload",
-        "finalizeStandaloneUpload",
-    ):
-        function_start = source.index(f"async function {function_name}")
-        function_end = source.index(
-            "\nasync function ",
-            function_start + 1,
-        )
-        function_source = source[function_start:function_end]
-        conversation_creation = function_source.index(
-            "const conversation = await createConversation"
-        )
-
-        assert "conversation.user_type" not in (
-            function_source[:conversation_creation]
-        )
+    assert "async function pollUploadJob" in source
+    assert "async function retryUploadJob" in source
+    assert 'INGESTION_POLL_INTERVAL_MS = 2000' in source
+    assert 'data.job_id' in source
 
 
 def test_knowledge_base_controls_are_present():
@@ -124,4 +111,4 @@ def test_frontend_supports_sequential_multi_pdf_upload():
     assert "async function requestPdfIndex" in source
     assert "for (const [index, file] of files.entries())" in source
     assert "await requestPdfIndex(" in source
-    assert "renderBatchUploadResults(results)" in source
+    assert "renderIngestionStatus()" in source

@@ -462,6 +462,33 @@ input[type="file"] {
   line-height: 1.45;
 }
 
+.batch-result-item .ingestion-track {
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ingestion-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+}
+
+.batch-result-item button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 7px;
+  background: transparent;
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .batch-result-item.success span {
   color: #6ee7b7;
 }

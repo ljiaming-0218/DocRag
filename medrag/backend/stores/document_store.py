@@ -24,6 +24,16 @@ async def insert_document(document) -> None:
     document_collection = database["documents"]
     await document_collection.insert_one(document)
 
+
+async def delete_unindexed_document(user_id: str, document_id: str) -> bool:
+    result = await get_database()["documents"].delete_one({
+        "_id": document_id,
+        "user_id": user_id,
+        "active_index_generation_id": None,
+        "processing_status": "pending",
+    })
+    return result.deleted_count == 1
+
 async def find_documents_by_user(
     user_id: str,
     limit: int = 50,
@@ -133,6 +143,8 @@ async def compare_and_set_document_index_generation(
     index_fingerprint: str,
     index_config: dict,
     indexed_at: datetime,
+    *,
+    session=None,
 ) -> bool:
     """Activate a generation only when the active pointer is unchanged."""
     database = get_database()
@@ -171,6 +183,7 @@ async def compare_and_set_document_index_generation(
                 "error_message": "",
             },
         },
+        **({"session": session} if session is not None else {}),
     )
     return result.matched_count == 1
 

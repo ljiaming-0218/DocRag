@@ -133,7 +133,9 @@ def test_duplicate_file_reuses_saved_path(monkeypatch, tmp_path):
         BytesIO(VALID_PDF),
     )
 
-    assert first == second
+    assert first["保存路径"] == second["保存路径"]
+    assert first["created_new_file"] is True
+    assert second["created_new_file"] is False
     assert len(list(tmp_path.glob("*.pdf"))) == 1
     assert list(tmp_path.glob("*.tmp")) == []
 
