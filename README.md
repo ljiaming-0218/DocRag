@@ -5,509 +5,217 @@ colorFrom: yellow
 colorTo: green
 sdk: docker
 pinned: false
-short_description: 面向 PDF 文献阅读的 RAG 智能助手
+short_description: 面向 PDF 文档阅读的可评估 RAG 应用
 app_port: 7860
 ---
 
-# DocRAG Agent：面向 PDF 文献阅读的 RAG 智能助手
+# DocRAG Agent
 
-DocRAG Agent 是一个面向学术论文、技术文档、课程资料和项目报告的 PDF 文献阅读助手。系统以检索增强生成（RAG）为主链路，支持文档解析、版本化文本切分、单文档与知识库级多文档检索、重排、多轮问答、引用来源展示和历史会话。
+DocRAG 是一个面向论文、技术文档、课程资料和项目报告的多文档 RAG 应用。它把 PDF 解析、版本化切片、向量索引、混合检索、重排、会话记忆、来源持久化和离线评估串成一条可以运行和定位问题的工程链路。
 
-项目重点不是单纯调用大模型，而是实现一条可调试、可评估、可持久化的文档问答流程。系统回答仅用于辅助阅读，重要结论应回到原始文档和引用片段核验。
+系统输出用于辅助阅读，重要结论应回到原文和引用片段核验。本项目不是医学诊断系统。
+
+## 当前版本结论
+
+当前版本标记为 **v1.1.0 演示候选（条件结项）**。主链路和最新固定 20 题的接口执行均已验收，但评估质量、延迟和容量证据仍不足以称为严格生产发布。
+
+| 证据 | 当前结果 |
+| --- | --- |
+| GitHub 源码 | `fe2ac23f138397fae8a0b4a257fec00ab7fd1be3` |
+| GitHub CI | Run `36536543292`，通过 |
+| Hugging Face 部署 | `8770e28ec88e5d7797e622117cd749eace20f168` |
+| `/health` | `build_commit` 与线上部署提交一致 |
+| `/ready` | 200；MongoDB、Chroma、上传目录、LLM 配置均 ready |
+| 线上业务闭环 | 注册、登录、上传、索引完成、提问、来源展示、历史消息均通过 |
+| 本地工程测试 | 用户在当前阶段运行：374 passed、9 skipped、6 warnings |
+| 固定 20 题回归 | 20/20 执行成功、无 HTTP 500；证据召回 0.632，P95 约 199.9 秒 |
+| LLM Judge | 正确性 0.855、完整性 0.786、忠实性 0.989、引用正确性 0.933 |
+
+线上验收原始报告：`eval/runs/release_acceptance/release-acceptance-20260929T075433283381Z.json`。
+
+固定 20 题运行报告：`eval/runs/generation/generation-single_turn-20260929T085541756035Z/summary.json`。Judge 报告：`eval/runs/judge/judge-20260929T094048797812Z/summary.json`。Judge 是辅助指标，不能替代人工抽检。
 
 ## 在线演示
 
 - Hugging Face Space：<https://maoxiao-1205-medrag.hf.space/>
-- 免费实例可能休眠，首次访问需要等待模型和服务启动。
-- 演示环境受免费实例资源和本地磁盘持久性限制，请勿上传敏感文件。
-- 可通过 `/health` 返回的 `build_commit` 与 GitHub commit 对比，确认线上运行的具体版本。
+- 健康检查：<https://maoxiao-1205-medrag.hf.space/health>
+- API 文档：<https://maoxiao-1205-medrag.hf.space/docs>
 
-## 项目预览
+免费实例可能休眠或冷启动。演示环境使用独立数据目录，不要上传敏感文件。
 
-### 多轮文献问答与引用来源
+## 已实现能力
 
-![DocRAG 多轮文献问答与引用来源](medrag/docs/images/02-chat-sources.png)
+### 文档与索引
 
-系统在同一会话中保存用户问题、助手回答和当时使用的 sources。引用片段可展开查看页码、chunk 与检索距离，便于回到原文核验。
+- PyMuPDF 按页解析 PDF，低文本量页面可选 Tesseract OCR 回退。
+- `fixed` 和 `recursive` 两种切片策略，保存页码、字符范围、策略和版本元数据。
+- 以 `document_hash` 识别同一用户的重复文件。
+- 以 `index_fingerprint` 判断切片参数、Embedding 模型和索引版本是否变化。
+- 索引任务持久化在 MongoDB，`POST /pdf/index` 返回 `202 + job_id`，支持查询、重试、幂等键和 `force_reindex`。
+- 每次重建写入独立 `index_generation_id`，校验完成后再切换 active generation。
+- Embedding 和 Chroma 写入支持批处理。
 
-### 历史文档与会话管理
+### 检索与回答
 
-![DocRAG 历史文档与会话管理](medrag/docs/images/03-history-memory.png)
+- Dense 检索可作为基线，Hybrid 使用 BM25 + RRF 补充术语、缩写和数字匹配。
+- 候选扩大后使用 `BAAI/bge-reranker-base` CrossEncoder 全局重排。
+- 支持证据阈值、Query Rewrite 和 Summary Multi-Query。
+- 无证据时拒答，不让 LLM 用参数知识补齐文档事实。
+- assistant 消息持久化 `sources`、`rewritten_query`、`retrieval_queries` 和 `task_type`。
 
-文档、会话和消息按用户归属保存。用户可以选择已索引文档、恢复历史会话，也可以基于同一文档新建对话。
+### 知识库与会话
 
-## 功能特性
-
-### 文档处理
-
-- 上传 PDF，并使用 PyMuPDF 按页提取文本和页码。
-- 通过 `chunk_size`、`chunk_overlap` 切分文本，并保留页码、块序号、文档标识等 metadata。
-- 支持 `fixed` 和 `recursive` 两种切片策略，并为切片算法维护显式 `chunk_version`。
-- 计算 PDF 内容的 SHA-256 `document_hash`。
-- 通过 `user_id + document_hash` 识别同一用户重复上传的相同文件，避免重复解析和索引。
-- 根据切片参数、切片版本、Embedding 模型和索引版本生成 `index_fingerprint`；只有指纹一致才复用旧索引。
-- `/pdf/index` 接受上传后创建持久化索引任务并返回 `202 + job_id`；有效索引可直接复用并返回 `200`。支持 `Idempotency-Key` 和 `force_reindex=true`。
-- 每次重建生成独立 `index_generation_id`，新代次完整写入并验证后通过 compare-and-set 切换 MongoDB 中的 active generation；并发冲突时清理未激活代次，Dense 与 BM25 检索只读取当前 active 版本。
-- 对疑似扫描页支持可选的 Tesseract 中英文 OCR 回退。
-- 记录文档主要语言，用于跨语言 Query Rewrite。
-- 持久化 `parsing/chunking/embedding/indexing` 处理阶段和失败原因，只有完整写入并校验后才将索引标记为完成。
-- Embedding API 与 Chroma 写入支持配置化批处理，降低大文档处理时的请求次数和单批写入压力。
-
-### 检索与生成
-
-- 通过 SiliconFlow 的 OpenAI-compatible API 调用 `BAAI/bge-m3` 生成中英文统一语义空间的文本向量。
-- 使用 Chroma 持久化向量，并通过 `user_id + document_id` 过滤检索范围。
-- 支持通过 `RETRIEVAL_MODE=dense|hybrid` 切换 Dense 基线与混合检索。
-- Hybrid 模式使用 BM25 补充模型名、缩写、数字等精确匹配候选，并通过 RRF 融合 Dense 与 Sparse 排名。
-- 支持通过 `EVIDENCE_RERANK_MIN_SCORE` 配置 CrossEncoder 证据阈值；留空时关闭过滤，阈值需使用固定评估集校准。
-- 先扩大向量候选池，再使用 `BAAI/bge-reranker-base` 对 `query + chunk` 重排。
-- 保存并展示回答对应的 sources，包括页码、chunk 和检索分数。
-- 检索无证据时直接拒答，不调用 LLM 基于参数知识补充答案。
-- Rewrite 与 Answer 使用两套可独立配置的 OpenAI-compatible LLM Client，并对超时、限流、连接失败和异常状态进行分类处理。
-
-### 知识库与多文档问答
-
-- 一个用户可以创建、重命名和删除多个知识库。
-- 文档与知识库使用独立关联记录，同一文档可以加入多个知识库，无需重复生成向量。
-- 支持查看知识库文档、移入文档和移出文档。
-- 会话可以绑定单个文档，也可以绑定整个知识库。
-- 知识库会话可选择部分文档；不选择时检索知识库中的全部文档。
-- 多文档检索始终保留 `user_id` 过滤，并使用 `document_id in [...]` 限定知识库范围。
-- 各文档候选统一进入 CrossEncoder Rerank，最终 sources 保留文件名、文档 ID、页码和 chunk 信息。
-
-### 用户与多轮会话
-
-- 支持用户名、密码注册与登录；密码使用 Argon2 哈希后存入 MongoDB。
-- 登录成功后签发 JWT，受保护接口从 `Authorization: Bearer <token>` 解析当前用户。
-- 文档和会话按认证得到的 `user_id` 进行归属校验与逻辑隔离。
-- 同一文档可创建多个 conversation，也可继续历史会话。
-- user 和 assistant 消息持久化到 MongoDB。
-- assistant 消息保存 `sources`、`rewritten_query`、`retrieval_queries` 和 `task_type`。
-- 每轮问答读取最近若干条消息作为短期上下文，不无限拼接全部历史。
-- Query Rewrite 将含指代的追问改写为可独立检索的问题；失败时回退原始 query。
-- `user_type` 支持普通用户、本科生、研究生、科研人员、开发者和教师等回答侧重点。
-
-### 任务路由
-
-当前使用“LLM 判断 + 规则回退”的轻量 Router。LLM Router 输出结构化任务类型；调用失败、返回非法结果或置信度不足时，使用确定性规则兜底：
-
-- 包含“总结、摘要、概括、归纳”时进入 `summary`。
-- 包含“阅读报告、分析这篇文献”时进入 `report`。
-- 包含“术语、关键词、关键概念”时进入 `term`。
-- 包含“依据、出处、引用、来源、证据”时进入 `source_check`。
-- 其他问题进入普通 `qa`。
-
-总结任务使用 Summary Multi-Query：根据初始证据生成多个检索子查询，分别召回、重排、去重并控制同页片段数量，再组装总结上下文。`term` 和 `source_check` 使用独立 Prompt，要求回答必须回到 sources。增强流程失败时回退原查询，避免破坏基础问答链路。
+- 用户可以创建、重命名和删除知识库，并关联多个文档。
+- 会话可以绑定单文档或知识库，并选择知识库中的部分文档。
+- JWT + Argon2 登录，后端按认证得到的 `user_id` 校验资源归属。
+- 前端展示索引进度、错误状态、历史会话和可展开的来源片段。
 
 ## 系统流程
 
 ```text
-创建或选择用户
-  → 创建或选择知识库
-  → 上传 PDF，并按需关联知识库
-  → 计算 document_hash，检查重复文档
-  → PyMuPDF 按页解析，必要时 OCR
-  → 文本切分与 metadata 构造
-  → Embedding
-  → Chroma 向量持久化
-  → 创建或恢复单文档/知识库会话
-  → 读取最近历史
-  → Query Rewrite
-  → Agent Router 识别 qa / summary / report / term / source_check
-  → 用户与知识库范围校验
-  → 单文档或多文档向量召回 + 全局 CrossEncoder Rerank
-  → 组装 Prompt
-  → 调用 LLM
-  → 保存 answer、sources 和检索调试信息
-  → 前端展示回答与可折叠引用
+PDF 上传
+  → 文档 hash 与索引任务
+  → PyMuPDF / OCR 解析
+  → fixed / recursive 切片
+  → Embedding + Chroma + BM25
+  → 会话历史与 Query Rewrite
+  → Agent Router（qa / summary / report / term / source_check）
+  → Dense / Hybrid 召回
+  → RRF 去重与 CrossEncoder Rerank
+  → Prompt + LLM
+  → 保存回答、来源和检索调试信息
 ```
 
 ```mermaid
 flowchart LR
-    UI[Web 前端] --> API[FastAPI Router]
-    API --> KB[知识库服务]
-    KB --> MEMORY[(MongoDB)]
-    API --> INGEST[PDF 索引服务]
-    INGEST --> PARSE[PyMuPDF / OCR]
-    PARSE --> SPLIT[文本切分]
-    SPLIT --> EMBED[Embedding]
-    EMBED --> CHROMA[(Chroma)]
-
-    API --> CHAT[会话问答服务]
-    CHAT --> MEMORY
+    UI[Web 前端] --> API[FastAPI]
+    API --> AUTH[JWT / 用户归属校验]
+    API --> JOB[MongoDB 索引任务]
+    JOB --> PARSE[PyMuPDF / OCR]
+    PARSE --> SPLIT[Fixed / Recursive]
+    SPLIT --> INDEX[Embedding + Chroma + BM25]
+    API --> CHAT[会话服务]
     CHAT --> REWRITE[Query Rewrite]
-    REWRITE --> AGENT[Agent Router]
-    AGENT --> RETRIEVE[向量召回 + Rerank]
-    CHROMA --> RETRIEVE
-    RETRIEVE --> PROMPT[任务 Prompt]
-    PROMPT --> LLM[OpenAI-compatible LLM]
-    LLM --> CHAT
+    CHAT --> ROUTER[任务路由]
+    ROUTER --> SEARCH[Dense / Hybrid / Rerank]
+    SEARCH --> INDEX
+    CHAT --> LLM[OpenAI-compatible LLM]
+    CHAT --> STORE[(MongoDB)]
     CHAT --> UI
 ```
 
-更完整的模块说明见：
-
-- [项目说明](medrag/docs/项目说明.md)
-- [系统架构图](medrag/docs/系统架构图.md)
-- [评估体系说明](eval/README.md)
-
 ## 技术栈
 
-| 模块 | 技术 |
+| 层 | 技术 |
 | --- | --- |
-| 后端接口 | Python 3.11、FastAPI、Uvicorn |
-| PDF 解析 | PyMuPDF |
-| 扫描页 OCR | Tesseract OCR |
-| Embedding | SiliconFlow Embedding API、`BAAI/bge-m3` |
-| Reranker | CrossEncoder、`BAAI/bge-reranker-base` |
-| 向量数据库 | Chroma |
-| 业务数据 | MongoDB、PyMongo Async API |
-| 大模型 | Rewrite / Answer 双角色 OpenAI-compatible API |
+| API | Python 3.11、FastAPI、Uvicorn |
+| 解析 | PyMuPDF、可选 Tesseract OCR |
+| Embedding | SiliconFlow OpenAI-compatible API、`BAAI/bge-m3` |
+| 检索 | Chroma、BM25、RRF |
+| Rerank | Sentence Transformers CrossEncoder、`BAAI/bge-reranker-base` |
+| 业务数据 | MongoDB / PyMongo |
 | 前端 | HTML、CSS、JavaScript |
-| 测试与评估 | pytest、pytest-asyncio、Playwright、自建 RAG 小型评估集 |
+| 验证 | pytest、Playwright、固定 RAG 评估集 |
 | 部署 | Docker、Hugging Face Space |
 
-## 目录结构
+## 目录
 
 ```text
 MedRag/
-├─ medrag/
-│  ├─ backend/
-│  │  ├─ routers/        # HTTP 参数、响应和状态码
-│  │  ├─ services/       # 业务编排、检索、Prompt 和模型调用
-│  │  ├─ stores/         # MongoDB 集合读写
-│  │  ├─ prompts/        # QA、Summary、Report、Query Rewrite 模板
-│  │  ├─ config.py
-│  │  ├─ main.py
-│  │  ├─ requirements.txt
-│  │  └─ .env.example
-│  ├─ frontend/
-│  │  ├─ index.html
-│  │  ├─ app.js
-│  │  └─ styles.css
-│  └─ docs/
-├─ eval/
-│  ├─ dataset/           # 固定文档、单轮和追问案例
-│  ├─ runners/           # 检索、生成和线上验收入口
-│  ├─ metrics/           # 确定性指标计算
-│  ├─ tools/             # 数据校验和 bad case 诊断
-│  └─ runs/              # 本地运行产物，不提交 Git
-├─ tests/                # 业务层自动化回归测试
+├─ medrag/backend/       # FastAPI、业务服务、Prompt、Stores
+├─ medrag/frontend/      # 单页前端
+├─ medrag/docs/          # 项目说明、架构、演示与发布记录
+├─ eval/                 # 固定数据集、评估 runner、指标与验收报告
+├─ tests/                # 单元、接口契约和前端 smoke 测试
 ├─ runtime/              # 本地运行数据，不提交 Git
 ├─ Dockerfile
-├─ pytest.ini
-├─ requirements-dev.txt
 └─ README.md
 ```
 
-## 核心数据模型
-
-### users
-
-- `user_id`
-- `username`
-- `default_user_type`
-- `created_at`
-- `updated_at`
-
-### documents
-
-- `document_id`
-- `user_id`
-- `document_hash`
-- `filename`
-- `language`
-- `index_fingerprint`
-- `index_config`
-- `indexed_at`
-- `created_at`
-- `updated_at`
-
-### knowledge_bases
-
-- `kb_id`
-- `user_id`
-- `name`
-- `description`
-- `created_at`
-- `updated_at`
-
-### knowledge_base_documents
-
-- `kb_id`
-- `user_id`
-- `document_id`
-- `added_at`
-
-### conversations
-
-- `conversation_id`
-- `user_id`
-- `document_id`
-- `kb_id`
-- `selected_document_ids`
-- `title`
-- `user_type`
-- `created_at`
-- `updated_at`
-
-### messages
-
-- `message_id`
-- `conversation_id`
-- `role`
-- `content`
-- `task_type`
-- `rewritten_query`
-- `retrieval_queries`
-- `sources`
-- `created_at`
-
 ## 本地运行
 
-### 1. 环境要求
+### 安装与配置
 
-- Python 3.11
-- MongoDB
-- 可选：Tesseract OCR 及 `eng`、`chi_sim` 语言包
-
-### 2. 安装依赖
-
-```cmd
+```powershell
+Set-Location D:\MedRag
 conda activate medrag
-cd /d D:\MedRag\medrag\backend
-python -m pip install -r requirements.txt
+D:\Anaconda\envs\medrag\python.exe -m pip install -r medrag\backend\requirements.txt
+Copy-Item medrag\backend\.env.example medrag\backend\.env
 ```
 
-### 3. 配置环境变量
-
-复制配置模板：
-
-```cmd
-copy .env.example .env
-```
-
-配置示例：
+至少配置：
 
 ```env
 APP_VERSION=dev
-BUILD_COMMIT=unknown
-
-REWRITE_LLM_PROVIDER=modelscope
-REWRITE_LLM_API_KEY=your_rewrite_key
-REWRITE_LLM_BASE_URL=https://api-inference.modelscope.cn/v1
-REWRITE_LLM_MODEL=your_rewrite_model
-REWRITE_LLM_TIMEOUT_SECONDS=20
-REWRITE_LLM_MAX_RETRIES=0
-
-ANSWER_LLM_PROVIDER=modelscope
-ANSWER_LLM_API_KEY=your_answer_key
-ANSWER_LLM_BASE_URL=https://api-inference.modelscope.cn/v1
-ANSWER_LLM_MODEL=your_answer_model
-ANSWER_LLM_TIMEOUT_SECONDS=120
-ANSWER_LLM_MAX_RETRIES=1
-JWT_SECRET_KEY=replace-with-a-long-random-secret
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=120
-RETRIEVAL_MODE=dense
-EVIDENCE_RERANK_MIN_SCORE=
-EMBEDDING_BATCH_SIZE=32
-VECTOR_WRITE_BATCH_SIZE=100
+BUILD_COMMIT=local
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB_NAME=medrag_local
 CHROMA_DIR=D:/MedRag/runtime/chroma_db
 UPLOAD_DIR=D:/MedRag/runtime/uploads
-MONGODB_URI=mongodb://127.0.0.1:27017
-MONGODB_DB_NAME=medrag
-OCR_ENABLED=false
-OCR_LANGUAGES=eng+chi_sim
-OCR_DPI=300
-OCR_MIN_TEXT_CHARS=20
-TESSDATA_PREFIX=D:/Anaconda/envs/medrag/share/tessdata
-MAX_UPLOAD_SIZE_MB=20
+JWT_SECRET_KEY=replace-with-a-long-random-secret
+REWRITE_LLM_API_KEY=...
+ANSWER_LLM_API_KEY=...
 ```
 
-API Key 只能放在后端环境变量中。`.env`、上传文件、Chroma 数据和日志均不得提交到 Git。
+本地和线上必须使用不同的 MongoDB 数据库名、Chroma 目录和上传目录。`.env`、密钥、上传文件、向量库和日志不得提交 Git。
 
-本地与线上必须使用不同的 MongoDB 数据库名和独立的 Chroma 目录。例如：
+### 启动
 
-```text
-Local: MONGODB_DB_NAME=medrag_local
-HF:    MONGODB_DB_NAME=medrag_hf
+```powershell
+Set-Location D:\MedRag\medrag\backend
+D:\Anaconda\envs\medrag\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-MongoDB 元数据中的 active generation 只对创建它的向量存储有效。不同运行环境共享 MongoDB、但不共享 Chroma 时，会造成“文档显示已完成但本地没有对应向量”的状态冲突。
-
-LLM 层按职责使用两套 OpenAI-compatible 配置：`REWRITE_LLM_*` 负责
-Query Rewrite 和 Summary Query，`ANSWER_LLM_*` 负责最终回答、总结、报告、
-术语解释和来源核查。两套配置可以使用不同供应商，也可以暂时使用同一供应商。
-免费推理服务仍可能限流或临时不可用，不应将免费额度理解为可用性承诺。
-
-### 4. 启动
-
-```cmd
-cd /d D:\MedRag\medrag\backend
-python -m uvicorn main:app --host 127.0.0.1 --port 8000
-```
-
-访问：
-
-- 前端：<http://127.0.0.1:8000/>
-- Swagger：<http://127.0.0.1:8000/docs>
-- 健康检查：<http://127.0.0.1:8000/health>（包含应用版本和构建提交号）
-- 就绪检查：<http://127.0.0.1:8000/ready>
-
-模型已缓存且 Hugging Face 网络不可用时，可在启动前设置：
-
-```cmd
-set HF_HUB_OFFLINE=1
-set TRANSFORMERS_OFFLINE=1
-```
+访问 `http://127.0.0.1:8000/`、`/docs`、`/health` 和 `/ready`。
 
 ## 主要接口
 
-| 方法与路径 | 功能 |
-| --- | --- |
-| `GET /health` | 服务存活检查，并返回 `version` 与 `build_commit` |
-| `GET /ready` | 检查数据库等关键依赖是否就绪 |
-| `POST /auth/register` | 注册用户并返回 JWT |
-| `POST /auth/login` | 校验用户名和密码并返回 JWT |
-| `GET /auth/me` | 根据 JWT 获取当前用户信息 |
-| `POST /pdf/parse` | 临时解析 PDF 并返回分页文本；响应后删除临时文件，不创建 Document 或索引 |
-| `POST /pdf/chunks` | 临时预览切分结果；不写入 MongoDB 或 Chroma |
-| `POST /pdf/index` | 保存 PDF 并提交索引任务；新任务返回 `202 + job_id`，有效索引复用返回 `200`；支持 `Idempotency-Key` 和 `force_reindex` |
-| `GET /ingestion-jobs/{job_id}` | 查询所属用户的索引任务状态、进度和错误 |
-| `POST /ingestion-jobs/{job_id}/retry` | 将失败且未超过重试次数的任务重新入队 |
-| `POST /pdf/search` | 调试指定用户和文档的检索结果 |
-| `POST /pdf/prompt-preview` | 预览单轮 RAG Prompt |
-| `POST /pdf/answer` | 单轮 RAG 问答兼容接口 |
-| `POST /knowledge-bases` | 创建知识库 |
-| `GET /knowledge-bases` | 获取当前用户的知识库列表 |
-| `GET/PATCH/DELETE /knowledge-bases/{kb_id}` | 查询、修改或删除知识库 |
-| `POST/DELETE /knowledge-bases/{kb_id}/documents/{document_id}` | 将文档移入或移出知识库 |
-| `GET /knowledge-bases/{kb_id}/documents` | 获取知识库文档列表 |
-| `POST /conversations` | 创建单文档或知识库会话 |
-| `GET /conversations` | 按用户、文档或知识库获取会话列表 |
-| `GET /conversations/{id}/messages` | 校验用户归属并获取历史消息 |
-| `POST /conversations/{id}/ask` | 执行多轮 Query Rewrite、检索和回答 |
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/health` | 返回版本和构建提交号 |
+| GET | `/ready` | 检查 MongoDB、Chroma、上传目录和 LLM 配置 |
+| POST | `/auth/register`、`/auth/login` | 注册和登录 |
+| POST | `/pdf/index` | 创建或复用索引任务 |
+| GET | `/ingestion-jobs/{job_id}` | 查询索引进度和错误 |
+| POST | `/ingestion-jobs/{job_id}/retry` | 重试失败任务 |
+| POST | `/knowledge-bases` | 创建知识库 |
+| POST | `/conversations` | 创建单文档或知识库会话 |
+| POST | `/conversations/{id}/ask` | 多轮检索问答 |
+| GET | `/conversations/{id}/messages` | 获取历史消息和来源 |
 
-请求与响应的完整字段以 Swagger 为准。
+完整请求字段以在线 Swagger 为准。
 
-## 发布版本核验
+## 验证命令
 
-发布前先取得当前 GitHub 提交号：
+只读静态检查：
 
-```cmd
-git rev-parse HEAD
+```powershell
+Set-Location D:\MedRag
+D:\Anaconda\envs\medrag\python.exe -m compileall -q medrag\backend eval tests
+git diff --check
 ```
 
-在 Hugging Face Space 的 Settings 中配置普通 Variables：
+用户已在当前版本执行过全量 pytest，结果为 `374 passed, 9 skipped, 6 warnings`。如需在后续提交上重新确认，使用：
 
-```text
-APP_VERSION=当前发布版本
-BUILD_COMMIT=上一步得到的完整 Git SHA
-MONGODB_DB_NAME=medrag_hf
-CHROMA_DIR=/home/user/app/runtime/chroma_bge_m3_api
-UPLOAD_DIR=/home/user/app/runtime/uploads
-```
-
-`BUILD_COMMIT` 不是密钥，应放 Variables；API Key、MongoDB URI 和 JWT Secret 必须放 Secrets。Docker Space 会把 Variables 同时提供给构建阶段和运行时。部署完成后访问：
-
-```text
-https://maoxiao-1205-medrag.hf.space/health
-```
-
-只有 `build_commit` 与准备发布的 Git SHA 一致，才能认为线上同步完成。由于免费 Space 的本地磁盘可能在重建或休眠后丢失，线上文档应在独立数据库中记录，并在索引缺失时重新上传或重建，不能与本地 Chroma 共用 active generation 元数据。
-
-## 自动化测试
-
-安装开发依赖：
-
-```cmd
-cd /d D:\MedRag
-D:\Anaconda\envs\medrag\python.exe -m pip install -r requirements-dev.txt
-```
-
-运行：
-
-```cmd
+```powershell
 D:\Anaconda\envs\medrag\python.exe -m pytest -q
 ```
 
-当前自动化回归测试覆盖：
+固定评估和线上验收入口见 [评估说明](eval/README.md)。运行产物写入 `eval/runs/`，不应提交 Git。
 
-- 不指定文档时查询用户全部会话。
-- 拒绝空 `document_id`。
-- 同一用户和相同 `document_hash` 复用已有文档。
-- Query Rewrite 调用失败时回退原问题。
-- assistant 消息保存 sources。
-- 前端 Playwright smoke 覆盖创建用户、上传索引、重复上传、历史会话、追问和 sources 展示。
-- 前端静态回归检查 `indexPdf()` 不会在创建会话前读取 `conversation.user_type`。
-- 知识库 CRUD、用户归属校验和文档关联幂等性。
-- 整个知识库与指定文档范围的多文档检索。
-- Chroma `user_id + document_id $in` 过滤和跨文档全局 Rerank。
-- 前端知识库创建、文档关联、知识库会话和 sources 文件名展示。
+## 已知限制
 
-当前全量工程测试基线：
-
-最近一次稳定回归基线以实际 `pytest -q` 输出为准；评估体系重构后需要重新
-运行回归再更新固定数字。
-
-测试包含业务单元测试、接口契约测试和前端 smoke test。大量外部依赖通过 Mock 隔离，因此不能替代 MongoDB、Chroma、真实模型和完整接口的集成测试。
-
-## RAG 评估
-
-评估集包含 3 篇公开论文、19 道问题，覆盖事实、术语、对比、总结、无答案、多轮追问和证据核查。
-
-```cmd
-cd /d D:\MedRag
-python -m eval.tools.validate_dataset --require-gold-evidence
-python -m eval.runners.retrieval
-python -m eval.runners.generation --suite single_turn
-python -m eval.runners.generation --suite follow_up
-```
-
-运行结果写入 `eval/runs/`，不会提交 Git。检索评估分别记录候选召回、
-Rerank 后结果和证据阈值过滤结果；生成评估单独记录接口成功率、任务路由、
-拒答、引用及人工评分项。不同 dataset fingerprint 的结果不能直接比较。
-
-## 关键工程问题与处理
-
-### CORS 导致前端 `Failed to fetch`
-
-前后端分别运行在不同端口时属于不同 Origin，浏览器会执行同源策略。后端通过 FastAPI `CORSMiddleware` 显式允许开发前端来源；正式部署时由 FastAPI 同源托管静态前端，减少跨域配置差异。
-
-### Chroma HNSW 索引损坏
-
-旧 Chroma 持久化目录曾在删除文档向量时出现 `Error loading hnsw index`。处理时保留损坏目录用于排查，创建新的项目级持久化目录并重新索引；配置统一使用 `CHROMA_DIR`，避免数据散落到系统盘。当前重新索引使用独立 generation 写入，验证完成后切换 active generation；失败代次会被清理，旧 active 版本不会在写入开始前删除。
-
-### Query Rewrite 偏离或失败
-
-追问中的“它、该方法、另一个变体”直接检索容易丢失主题。系统读取最近几轮历史补全指代，并保存 `original_query`、`rewritten_query` 和 `retrieval_queries` 便于复现。改写失败时回退原问题，避免增强模块阻断主链路；原问题仍用于前端展示和消息存储。
-
-### Summary 单次召回覆盖不足
-
-总结问题的证据通常分散在多个页面，单次 top-k 容易只命中一个局部。Summary Multi-Query 先生成多个检索子问题，再分别召回、Rerank、去重并限制同页 chunk 数量，从而扩大证据覆盖。优化效果必须通过固定评估集比较 HitRate、Recall、MRR、引用准确性和延迟，不能只看回答是否流畅。
-
-## 工程边界
-
-- 当前已实现 Argon2 密码哈希、JWT 登录态和受保护接口身份校验；兼容期请求仍携带 `user_id`，但后端会与 JWT 身份比对，不直接信任客户端字段。
+- 最新固定 20 题运行 20/20 执行成功且无 HTTP 500；证据召回为 0.632，P95 延迟约 199.9 秒，1 个可回答问题被误拒答。Judge 平均正确性 0.855、完整性 0.786；低分集中在 CoT 定义和跨文档总结。此前 5/20 的结果保留为 MongoDB 依赖故障历史。
+- 20 题运行只证明接口执行情况，不能把执行成功率当作答案正确率；Judge 和人工评分需单独查看。
+- 评估集规模有限，Summary、跨文档和复杂版面文档的证据覆盖仍需扩大样本。
+- 线上容量、并发、长期磁盘可靠性和复杂表格/图片理解尚未完成基准。
+- 索引 worker 仍在 FastAPI 应用进程内运行；MongoDB Job 状态可恢复，但不等同于独立 worker 集群。
 - JWT 当前保存在浏览器 `localStorage`，尚未实现 HttpOnly Cookie、Refresh Token、Token 吊销和 RBAC。
-- 旧版无 `password_hash` 的轻量用户无法直接登录，需要重新注册新账号或由管理员执行受控迁移，系统不会自动认领旧身份。
-- OCR 只解决扫描页文字提取；复杂表格、公式、图表语义和普通图片尚未接入视觉模型。
-- Chroma 使用本地文件持久化，免费云实例重启后可能丢失索引。
-- `/health` 当前属于存活检查，不验证 MongoDB、Chroma、模型和 LLM 供应商的可用性。
-- 当前评估集规模较小，适合回归和基线比较，不代表生产环境效果。
-- 知识库删除涉及 MongoDB 多个集合，目前没有事务保证跨集合原子性。
-- `/pdf/search` 调试接口仍以单文档为主，多文档问答通过 conversation 主链路执行。
-- 多文档工程链路已经完成，但尚未形成固定的多文档检索效果基线。
-- 现阶段仍缺少 Token 吊销与刷新机制、完整监控指标、并发测试和容量测试。
 
-## 后续计划
+## 文档入口
 
-1. 固定多文档评估集，验证整库检索、部分文档检索、跨文档比较和越权隔离。
-2. 分析多文档候选覆盖、全局 Rerank 排名、引用准确性和延迟，形成可复现基线。
-3. 固化 Hybrid Retrieval 评估，对比 Dense、Dense + Rerank 和 Hybrid + RRF + Rerank。
-4. 补充 MongoDB/Chroma 真实集成测试、结构化日志、请求级追踪和依赖 readiness。
-5. 达到实际容量瓶颈后再通过 benchmark 决定是否从 Chroma 迁移到 Qdrant 或 Milvus。
-
-## 项目声明
-
-本项目是面向 PDF 文献检索与辅助阅读的实验性系统。系统生成内容不构成医学、法律、投资或其他专业建议；重要结论应结合原始文档和引用来源核验。
+- [项目说明](medrag/docs/项目说明.md)
+- [系统架构](medrag/docs/系统架构图.md)
+- [三分钟演示脚本](medrag/docs/demo-script.md)
+- [v1.1.0 结项记录](medrag/docs/release-v1.1.0.md)
+- [评估说明](eval/README.md)
