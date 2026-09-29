@@ -56,7 +56,8 @@
     </section>
 
     <div id="appView" class="app hidden">
-      <aside class="sidebar">
+      <div id="sidebarBackdrop" class="sidebar-backdrop hidden"></div>
+      <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
           <div class="brand">
             <span class="brand-mark">D</span>
@@ -66,28 +67,31 @@
             </div>
           </div>
           <button id="newConversationButton" class="new-chat-like" type="button">+ 新建对话</button>
+          <button id="openUploadButton" class="sidebar-upload-button" type="button">↑ 上传 PDF</button>
         </div>
 
         <div class="sidebar-scroll">
           <section class="side-panel">
             <div class="side-title">
               <strong>知识库</strong>
-              <span>组织多篇文档并在同一会话中联合检索</span>
             </div>
-
-            <label for="knowledgeBaseName">新建知识库</label>
-            <input id="knowledgeBaseName" maxlength="100" placeholder="例如：RAG 论文集" />
-            <textarea id="knowledgeBaseDescription" maxlength="500" placeholder="可选：说明知识库用途"></textarea>
-            <button id="createKnowledgeBaseButton" class="ghost-button" type="button">创建知识库</button>
-            <div id="knowledgeBaseStatus" class="status"></div>
             <div id="knowledgeBaseList" class="knowledge-base-list"></div>
+            <details class="inline-action" id="createKnowledgeBasePanel">
+              <summary>新建知识库</summary>
+              <div class="inline-action-body">
+                <label for="knowledgeBaseName">名称</label>
+                <input id="knowledgeBaseName" maxlength="100" placeholder="例如：RAG 论文集" />
+                <label for="knowledgeBaseDescription">描述（可选）</label>
+                <textarea id="knowledgeBaseDescription" maxlength="500" placeholder="这个知识库用于什么？"></textarea>
+                <button id="createKnowledgeBaseButton" class="ghost-button" type="button">创建知识库</button>
+                <div id="knowledgeBaseStatus" class="status"></div>
+              </div>
+            </details>
           </section>
 
-          <section class="side-panel">
-            <div class="side-title">
-              <strong>文档索引</strong>
-              <span>上传 PDF 后建立知识库</span>
-            </div>
+          <details id="uploadPanel" class="side-panel expandable-panel">
+            <summary>上传与索引</summary>
+            <div class="side-body">
 
             <label for="pdfFile">选择 PDF 文件</label>
             <label class="upload-picker" for="pdfFile">
@@ -139,13 +143,13 @@
             </div>
             <div id="indexStatus" class="status"></div>
             <div id="indexResult" class="result"></div>
-          </section>
-
-          <section class="side-panel">
-            <div class="side-title">
-              <strong>知识库文档</strong>
-              <span>不勾选表示检索整个知识库</span>
             </div>
+          </details>
+
+          <details id="knowledgeBaseDocumentsPanel" class="side-panel expandable-panel">
+            <summary>当前知识库文档</summary>
+            <div class="side-body">
+            <p class="panel-hint">不勾选时检索整个知识库</p>
             <div id="knowledgeBaseDocumentList" class="knowledge-base-document-list"></div>
             <button
               id="newKnowledgeBaseConversationButton"
@@ -155,13 +159,12 @@
               基于当前知识库新建对话
             </button>
             <div id="knowledgeBaseDocumentStatus" class="status"></div>
-          </section>
-
-          <section class="side-panel">
-            <div class="side-title">
-              <strong>文档库</strong>
-              <span>选择文档后继续历史会话，或新建单文档对话</span>
             </div>
+          </details>
+
+          <details id="documentPanel" class="side-panel expandable-panel">
+            <summary>文档库</summary>
+            <div class="side-body">
             <div id="documentList" class="document-list"></div>
             <button
               id="newDocumentConversationButton"
@@ -171,12 +174,12 @@
               基于所选文档新建对话
             </button>
             <div id="documentStatus" class="status"></div>
-          </section>
+            </div>
+          </details>
 
           <section class="side-panel">
             <div class="side-title">
               <strong>历史会话</strong>
-              <span>选择一个会话继续提问</span>
             </div>
             <div id="conversationList" class="conversation-list"></div>
             <div id="conversationStatus" class="status"></div>
@@ -213,32 +216,32 @@
 
       <main class="main">
         <header class="topbar">
+          <button id="mobileMenuButton" class="mobile-menu-button" type="button" aria-label="打开导航" aria-expanded="false" aria-controls="sidebar">☰</button>
           <div class="topbar-title">
             <strong>DocRAG Agent</strong>
             <span id="currentContextText">先上传 PDF，或从左侧选择历史会话。</span>
           </div>
-          <span class="topbar-badge">RAG with Sources</span>
+          <span class="topbar-badge">有据可查的回答</span>
         </header>
 
         <section class="chat" id="chatWindow">
           <div id="emptyState" class="welcome">
             <div class="welcome-card">
-              <h1>上传 PDF，然后开始提问</h1>
-              <p>
-                系统会解析 PDF、切分文本、写入向量库，并把你的问题、回答和引用来源保存到当前会话中。
-              </p>
+              <span class="welcome-eyebrow">你的文档工作台</span>
+              <h1>从文档中找到答案</h1>
+              <p>上传 PDF 或选择已有文档，开始提问。每条回答都可以查看引用来源。</p>
               <div class="quick-grid">
                 <div class="quick-card">
-                  <strong>1. 建立索引</strong>
-                  <span>在左侧上传 PDF，文档会进入您的文档库。</span>
+                  <strong>01 / 上传文档</strong>
+                  <span>导入一篇或多篇 PDF。</span>
                 </div>
                 <div class="quick-card">
-                  <strong>2. 连续提问</strong>
-                  <span>底部输入问题，回答会自动保存到当前会话。</span>
+                  <strong>02 / 开始提问</strong>
+                  <span>选择文档或知识库，开启会话。</span>
                 </div>
                 <div class="quick-card">
-                  <strong>3. 查看引用</strong>
-                  <span>助手回答下方会展示检索到的原文片段。</span>
+                  <strong>03 / 核验来源</strong>
+                  <span>展开回答下方的原文片段。</span>
                 </div>
               </div>
             </div>

@@ -188,7 +188,7 @@ def parse_judge_response(content: str) -> dict:
             errors.append(str(error))
     if not text or "{" not in text:
         raise ValueError("Judge 响应中没有 JSON 对象")
-    detail = errors[-1] if errors else "无法解析 JSON 对象"
+    detail = errors[0] if errors else "无法解析 JSON 对象"
     raise ValueError(f"Judge 响应无法解析为有效评分对象: {detail}")
 
 

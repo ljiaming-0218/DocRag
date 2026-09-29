@@ -30,6 +30,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
       - uses: actions/setup-python@v6
         with:
@@ -47,6 +49,9 @@ jobs:
 
       - name: Compile Python sources
         run: python -m compileall -q medrag/backend tests eval
+
+      - name: Check committed whitespace
+        run: git diff --check HEAD^ HEAD
 
       - name: Prepare reranker model cache
         run: |

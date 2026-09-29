@@ -293,13 +293,15 @@ def build_error_result(
 ) -> dict:
     response = getattr(error, "response", None)
     error_code = None
+    response_excerpt = None
     if response is not None:
         try:
             payload = response.json()
             if isinstance(payload, dict):
                 error_code = payload.get("error")
+                response_excerpt = str(payload.get("message") or "")[:500]
         except ValueError:
-            pass
+            response_excerpt = str(getattr(response, "text", ""))[:500]
     normalized_code = str(error_code or "").upper()
     if normalized_code.startswith((
         "DOCUMENT_", "RETRIEVAL_", "RERANK_", "EMBEDDING_", "VECTOR_",
@@ -321,6 +323,7 @@ def build_error_result(
         "error_type": type(error).__name__,
         "status_code": getattr(response, "status_code", None),
         "error_code": error_code,
+        "response_excerpt": response_excerpt,
         "error": str(error),
         "elapsed_seconds": elapsed_seconds,
         "failure_stage": failure_stage,

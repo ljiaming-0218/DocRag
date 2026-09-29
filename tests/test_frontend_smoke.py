@@ -147,6 +147,7 @@ def test_frontend_complete_smoke(tmp_path: Path):
         page.locator("#passwordInput").fill("password-123")
         page.locator("#authButton").click()
         page.locator("#appView:not(.hidden)").wait_for()
+        page.locator("#openUploadButton").click()
 
         pdf_path = tmp_path / "smoke.pdf"
         pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
@@ -315,6 +316,7 @@ def test_frontend_knowledge_base_smoke(tmp_path: Path):
         page.locator("#passwordInput").fill("password-123")
         page.locator("#authButton").click()
         page.locator("#appView:not(.hidden)").wait_for()
+        page.locator("#createKnowledgeBasePanel summary").click()
 
         page.locator("#knowledgeBaseName").fill("RAG Papers")
         page.locator("#knowledgeBaseDescription").fill(
@@ -322,6 +324,7 @@ def test_frontend_knowledge_base_smoke(tmp_path: Path):
         )
         page.locator("#createKnowledgeBaseButton").click()
         page.locator("[data-kb-id='kb-smoke']").wait_for()
+        page.locator("#openUploadButton").click()
 
         pdf_path = tmp_path / "rag.pdf"
         pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
@@ -502,6 +505,7 @@ def test_frontend_multi_pdf_upload_is_sequential(tmp_path: Path):
         page.locator("#passwordInput").fill("password-123")
         page.locator("#authButton").click()
         page.locator("#appView:not(.hidden)").wait_for()
+        page.locator("#openUploadButton").click()
 
         first_pdf = tmp_path / "paper-1.pdf"
         second_pdf = tmp_path / "paper-2.pdf"

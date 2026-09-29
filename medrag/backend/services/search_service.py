@@ -996,10 +996,11 @@ def merge_candidate_chunks(
             merged_candidate = {
                 **candidate,
                 "matched_queries": [matched_query],
-                "matched_query_scores": {
-                    matched_query: candidate_score,
-                },
             }
+            if candidate_score is not None:
+                merged_candidate["matched_query_scores"] = {
+                    matched_query: candidate_score,
+                }
             merged_chunks[key] = merged_candidate
             continue
 
@@ -1007,9 +1008,10 @@ def merge_candidate_chunks(
             existing["matched_queries"].append(matched_query)
 
         candidate_score = candidate.get("rerank_score")
-        existing.setdefault("matched_query_scores", {})[
-            matched_query
-        ] = candidate_score
+        if candidate_score is not None:
+            existing.setdefault("matched_query_scores", {})[
+                matched_query
+            ] = candidate_score
         existing_score = existing.get("rerank_score")
         if (
             candidate_score is not None
@@ -1042,9 +1044,20 @@ def select_query_covered_chunks(
     if limit <= 0:
         raise ValueError("limit 必须大于 0")
 
+    def score_or_negative_infinity(score):
+        return score if score is not None else float("-inf")
+
+    def query_score(chunk: dict, query: str):
+        score = chunk.get("matched_query_scores", {}).get(query)
+        if score is None:
+            score = chunk.get("rerank_score")
+        return score_or_negative_infinity(score)
+
     ranked_chunks = sorted(
         chunks,
-        key=lambda chunk: chunk.get("rerank_score", float("-inf")),
+        key=lambda chunk: score_or_negative_infinity(
+            chunk.get("rerank_score")
+        ),
         reverse=True,
     )
     selected = []
@@ -1085,13 +1098,7 @@ def select_query_covered_chunks(
                 for chunk in chunks
                 if query in chunk.get("matched_queries", [])
             ],
-            key=lambda chunk: chunk.get(
-                "matched_query_scores",
-                {},
-            ).get(
-                query,
-                chunk.get("rerank_score", float("-inf")),
-            ),
+            key=lambda chunk: query_score(chunk, query),
             reverse=True,
         )
         for query in retrieval_queries

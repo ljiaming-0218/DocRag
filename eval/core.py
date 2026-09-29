@@ -193,18 +193,65 @@ class EvalApiClient:
                         )
                     },
                 )
+            if payload.get("status") != "completed":
+                job_id = payload.get("job_id")
+                if not job_id:
+                    raise RuntimeError(
+                        f"索引未完成且没有 job_id: {document['document_key']}"
+                    )
+                job = self.wait_for_ingestion_job(job_id)
+                if job["document_id"] != payload["document_id"]:
+                    raise RuntimeError("索引任务的 document_id 不匹配")
+            indexed_documents = self.request_json(
+                "GET", f"/users/{user_id}/documents",
+                params={"limit": 100},
+            )
+            indexed_document = next(
+                (item for item in indexed_documents
+                 if item.get("document_id") == payload["document_id"]),
+                None,
+            )
+            if not indexed_document or (
+                indexed_document.get("processing_status") != "completed"
+                or not indexed_document.get("active_index_generation_id")
+            ):
+                raise RuntimeError(
+                    f"索引完成后未找到 active generation: {document['document_key']}"
+                )
             scopes[document["document_key"]] = {
                 "document_id": payload["document_id"],
-                "active_index_generation_id": payload.get(
+                "job_id": payload.get("job_id"),
+                "active_index_generation_id": indexed_document.get(
                     "active_index_generation_id"
                 ),
-                "index_fingerprint": payload.get("index_fingerprint"),
+                "index_fingerprint": indexed_document.get("index_fingerprint"),
                 "index_elapsed_seconds": round(
                     time.perf_counter() - started_at,
                     6,
                 ),
             }
         return scopes
+
+    def wait_for_ingestion_job(
+        self,
+        job_id: str,
+        *,
+        timeout_seconds: float = 900.0,
+        poll_seconds: float = 2.0,
+    ) -> dict:
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            job = self.request_json("GET", f"/ingestion-jobs/{job_id}")
+            if job.get("status") == "completed":
+                return job
+            if job.get("status") == "failed":
+                raise RuntimeError(
+                    "索引任务失败: "
+                    f"stage={job.get('stage')} code={job.get('error_code')} "
+                    f"message={job.get('error_message')}"
+                )
+            time.sleep(poll_seconds)
+        raise TimeoutError(f"索引任务超时: job_id={job_id}")
 
     def create_conversation(
         self,

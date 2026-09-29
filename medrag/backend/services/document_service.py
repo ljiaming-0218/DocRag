@@ -361,6 +361,10 @@ async def list_user_documents(
             "error_stage": document.get("error_stage"),
             "error_code": document.get("error_code"),
             "error_message": document.get("error_message"),
+            "index_fingerprint": document.get("index_fingerprint"),
+            "active_index_generation_id": document.get(
+                "active_index_generation_id"
+            ),
         }
         for document in documents
     ]

@@ -257,6 +257,7 @@ function resetUserWorkspace() {
   $("knowledgeBaseDocumentList").innerHTML = "";
   $("conversationList").innerHTML = "";
   $("uploadProgress").classList.add("hidden");
+  $("uploadPanel").open = false;
   $("uploadProgressText").textContent = "准备上传";
   $("uploadProgressCount").textContent = "0 / 0";
   $("uploadProgressBar").style.width = "0%";
@@ -377,6 +378,7 @@ async function handleCreateKnowledgeBase() {
     await loadKnowledgeBases();
     await selectKnowledgeBase(knowledgeBase.kb_id);
     setStatus("knowledgeBaseStatus", "知识库创建完成。", "success");
+    $("createKnowledgeBasePanel").open = false;
   } catch (error) {
     setStatus("knowledgeBaseStatus", error.message, "error");
   } finally {
@@ -385,6 +387,7 @@ async function handleCreateKnowledgeBase() {
 }
 
 async function selectKnowledgeBase(kbId) {
+  $("knowledgeBaseDocumentsPanel").open = true;
   const knowledgeBase = knowledgeBases.find((item) => item.kb_id === kbId);
   currentKnowledgeBaseId = kbId;
   currentDocumentId = "";
@@ -649,6 +652,7 @@ async function selectConversation(conversationId) {
   currentConversationId = conversationId;
   currentDocumentId = conversation?.document_id || "";
   currentKnowledgeBaseId = conversation?.kb_id || "";
+  if (currentKnowledgeBaseId) $("knowledgeBaseDocumentsPanel").open = true;
   selectedKnowledgeBaseDocumentIds = new Set(
     conversation?.selected_document_ids || []
   );
@@ -1169,6 +1173,7 @@ function resumePendingJobs() {
     uploadJobs.set(job.jobId, job);
     pollUploadJob(job);
   }
+  if (uploadJobs.size) $("uploadPanel").open = true;
   persistPendingJobs();
   renderIngestionStatus();
 }
@@ -1404,10 +1409,33 @@ async function answerQuestion() {
 }
 
 function bindEvents() {
+  const toggleMobileMenu = (open) => {
+    $("sidebar").classList.toggle("is-open", open);
+    $("sidebarBackdrop").classList.toggle("hidden", !open);
+    $("mobileMenuButton").setAttribute("aria-expanded", String(open));
+    $("mobileMenuButton").setAttribute("aria-label", open ? "关闭导航" : "打开导航");
+  };
+  $("mobileMenuButton").addEventListener("click", () => {
+    toggleMobileMenu(!$("sidebar").classList.contains("is-open"));
+  });
+  $("sidebarBackdrop").addEventListener("click", () => toggleMobileMenu(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") toggleMobileMenu(false);
+  });
+  $("sidebar").addEventListener("click", (event) => {
+    if (event.target.closest("[data-kb-id], [data-document-id], [data-conversation-id], #newConversationButton, #newDocumentConversationButton, #newKnowledgeBaseConversationButton")) {
+      toggleMobileMenu(false);
+    }
+  });
   $("authForm").addEventListener("submit", handleAuthSubmit);
   $("registerButton").addEventListener("click", handleRegister);
   $("logoutButton").addEventListener("click", logout);
   $("newConversationButton").addEventListener("click", startBlankConversation);
+  $("openUploadButton").addEventListener("click", () => {
+    const panel = $("uploadPanel");
+    panel.open = true;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   $("createKnowledgeBaseButton").addEventListener(
     "click",
     handleCreateKnowledgeBase

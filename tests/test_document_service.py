@@ -68,6 +68,8 @@ async def test_list_user_documents_returns_response_list(monkeypatch):
             "error_stage": None,
             "error_code": None,
             "error_message": None,
+            "index_fingerprint": None,
+            "active_index_generation_id": None,
         }
     ]
     find_documents.assert_awaited_once_with(

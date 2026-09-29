@@ -564,7 +564,7 @@ def test_knowledge_base_overview_uses_original_query_after_rewrite(
     assert len(result["retrieval_queries"]) == 2
 
 
-def test_summary_respects_configured_candidate_and_rerank_windows(monkeypatch):
+def test_summary_reranks_full_candidate_window_for_coverage(monkeypatch):
     candidates = [
         make_candidate(f"summary evidence {index}", chunk_index=index)
         for index in range(8)
@@ -594,4 +594,4 @@ def test_summary_respects_configured_candidate_and_rerank_windows(monkeypatch):
     )
 
     assert retrieve.call_args_list[-1].args[3] == 10
-    assert rerank.call_args_list[-1].args[2] == 3
+    assert rerank.call_args_list[-1].args[2] == len(candidates)

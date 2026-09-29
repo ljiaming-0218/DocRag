@@ -15,6 +15,7 @@ def login(page):
 def upload(page, tmp_path: Path):
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.7\n%%EOF\n")
+    page.locator("#openUploadButton").click()
     page.locator("#pdfFile").set_input_files(str(pdf))
     page.locator("#indexButton").click()
     page.locator(".batch-result-item").first.wait_for()
@@ -128,6 +129,7 @@ def test_ingestion_refresh_restores_pending_job(tmp_path: Path):
 
         state.update(status="running", stage="chunking", progress=25)
         page.reload(wait_until="networkidle")
+        assert page.locator("#uploadPanel").evaluate("element => element.open")
         page.get_by_text("正在切分文档", exact=True).wait_for()
         assert page.locator(".ingestion-track").get_attribute("aria-valuenow") == "25"
         state.update(status="completed", stage="completed", progress=100)
