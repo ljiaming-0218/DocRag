@@ -177,13 +177,20 @@
             </div>
           </details>
 
-          <section class="side-panel">
-            <div class="side-title">
-              <strong>历史会话</strong>
+          <details id="conversationHistoryPanel" class="side-panel expandable-panel" open>
+            <summary>历史会话</summary>
+            <div class="side-body">
+              <div id="conversationList" class="conversation-list"></div>
+              <div id="conversationStatus" class="status"></div>
             </div>
-            <div id="conversationList" class="conversation-list"></div>
-            <div id="conversationStatus" class="status"></div>
-          </section>
+          </details>
+
+          <details id="researchHistoryPanel" class="side-panel expandable-panel">
+            <summary>研究记录</summary>
+            <div class="side-body">
+              <div id="researchHistory"><p class="empty-list">暂无研究记录。</p></div>
+            </div>
+          </details>
 
           <details class="side-panel" hidden>
             <summary>检索调试</summary>
@@ -224,6 +231,17 @@
           <span class="topbar-badge">有据可查的回答</span>
         </header>
 
+        <section id="researchView" class="chat research-view hidden" aria-label="深入研究结果">
+          <div id="researchTask" class="research-task">
+            <div class="research-welcome">
+              <h1>让文档回答更深入的问题</h1>
+              <p>选好左侧知识库，在下方提出问题。系统会分步检索，补查缺失证据，再整理回答。</p>
+              <button type="button" class="research-suggestion" data-research-suggestion="比较所选文档各自解决的问题、方法与局限。">比较论文的方法与局限 <span aria-hidden="true">↗</span></button>
+              <button type="button" class="research-suggestion" data-research-suggestion="归纳所选文档的共同结论，指出证据不足的地方。">归纳共识与证据缺口 <span aria-hidden="true">↗</span></button>
+            </div>
+          </div>
+        </section>
+
         <section class="chat" id="chatWindow">
           <div id="emptyState" class="welcome">
             <div class="welcome-card">
@@ -250,8 +268,16 @@
           <div id="answerResult" class="chat-result"></div>
         </section>
 
-        <section class="composer-wrap">
+        <section class="composer-wrap" id="chatComposer">
           <div class="composer">
+            <div class="composer-toolbar">
+              <div class="composer-modes" role="group" aria-label="回答方式">
+                <button id="chatWorkspaceButton" class="composer-mode active" type="button" aria-pressed="true">问答</button>
+                <button id="researchWorkspaceButton" class="composer-mode" type="button" aria-pressed="false">深入研究</button>
+              </div>
+              <span id="researchScopeHint" class="research-scope-hint hidden"></span>
+              <button id="newResearchButton" class="research-text-button hidden" type="button">新研究</button>
+            </div>
             <input id="answerConversationId" type="hidden" />
             <input id="answerTopK" type="hidden" value="3" />
             <input id="answerUserType" type="hidden" value="general" />
@@ -262,6 +288,7 @@
             </div>
 
             <div id="answerStatus" class="status"></div>
+            <div id="researchStatus" class="status" role="status" aria-live="polite"></div>
             <p class="composer-note">
               回答仅用于辅助阅读，请结合原文片段和引用来源核验。
             </p>
@@ -270,6 +297,13 @@
       </main>
     </div>
 
+    <div id="researchSourceBackdrop" class="research-source-backdrop hidden"></div>
+    <aside id="researchSourceDrawer" class="research-source-drawer hidden" role="dialog" aria-modal="true" aria-labelledby="researchSourceTitle">
+      <div class="research-source-header"><h2 id="researchSourceTitle">引用原文</h2><button id="researchSourceClose" type="button" aria-label="关闭引用原文">×</button></div>
+      <div id="researchSourceContent"></div>
+    </aside>
+
+    <script src="research.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -242,6 +242,7 @@ async def test_lifespan_starts_and_stops_worker(monkeypatch):
     ):
         monkeypatch.setattr(main, name, noop)
     monkeypatch.setattr(main, "run_worker_loop", worker)
+    monkeypatch.setattr(main.app.state.research_task_store, "create_indexes", noop)
     async with main.lifespan(main.app):
         await asyncio.sleep(0)
         assert calls == ["started"]

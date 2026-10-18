@@ -11,6 +11,8 @@ let knowledgeBases = [];
 let knowledgeBaseDocuments = [];
 let selectedKnowledgeBaseDocumentIds = new Set();
 let conversations = [];
+let answeringConversationId = null;
+const deletingConversations = new Set();
 const uploadJobs = new Map();
 let uploadResults = [];
 
@@ -165,6 +167,7 @@ async function completeAuthentication(authResult) {
   await loadKnowledgeBases();
   await loadDocuments();
   await loadConversations();
+  ResearchUI.loadHistory();
   resumePendingJobs();
 }
 
@@ -231,6 +234,7 @@ async function handleRegister() {
 }
 
 function resetUserWorkspace() {
+  ResearchUI.reset();
   for (const job of uploadJobs.values()) clearTimeout(job.timer);
   uploadJobs.clear();
   uploadResults = [];
@@ -309,6 +313,7 @@ async function loadKnowledgeBases() {
 }
 
 function renderKnowledgeBaseList() {
+  ResearchUI.syncContext();
   const target = $("knowledgeBaseList");
   if (!knowledgeBases.length) {
     target.innerHTML = '<p class="empty-list">还没有知识库。</p>';
@@ -390,6 +395,7 @@ async function selectKnowledgeBase(kbId) {
   $("knowledgeBaseDocumentsPanel").open = true;
   const knowledgeBase = knowledgeBases.find((item) => item.kb_id === kbId);
   currentKnowledgeBaseId = kbId;
+  knowledgeBaseDocuments = [];
   currentDocumentId = "";
   currentConversationId = "";
   selectedKnowledgeBaseDocumentIds = new Set();
@@ -401,6 +407,7 @@ async function selectKnowledgeBase(kbId) {
   $("newKnowledgeBaseConversationButton").classList.remove("hidden");
   $("emptyState").classList.remove("hidden");
   renderKnowledgeBaseList();
+  renderKnowledgeBaseDocuments();
   renderDocumentList();
   updateContextText({
     title: knowledgeBase?.name || "当前知识库",
@@ -426,6 +433,7 @@ async function loadKnowledgeBaseDocuments(kbId = currentKnowledgeBaseId) {
     );
     const response = await authorizedFetch(url);
     const data = await parseResponse(response);
+    if (kbId !== currentKnowledgeBaseId) return;
     knowledgeBaseDocuments = Array.isArray(data) ? data : [];
     const availableIds = new Set(
       knowledgeBaseDocuments.map((document) => document.document_id)
@@ -435,6 +443,7 @@ async function loadKnowledgeBaseDocuments(kbId = currentKnowledgeBaseId) {
     );
     renderKnowledgeBaseDocuments();
   } catch (error) {
+    if (kbId !== currentKnowledgeBaseId) return;
     knowledgeBaseDocuments = [];
     renderKnowledgeBaseDocuments();
     setStatus("knowledgeBaseDocumentStatus", error.message, "error");
@@ -442,6 +451,7 @@ async function loadKnowledgeBaseDocuments(kbId = currentKnowledgeBaseId) {
 }
 
 function renderKnowledgeBaseDocuments() {
+  ResearchUI.syncContext();
   const target = $("knowledgeBaseDocumentList");
   if (!currentKnowledgeBaseId) {
     target.innerHTML = '<p class="empty-list">请先选择知识库。</p>';
@@ -539,6 +549,7 @@ function renderDocumentList() {
 }
 
 async function selectDocument(documentId) {
+  ResearchUI.showChat();
   const document = documents.find(
     (item) => item.document_id === documentId
   );
@@ -628,7 +639,7 @@ function renderConversationList() {
     .map((conversation) => {
       const activeClass = conversation.conversation_id === currentConversationId ? " active" : "";
       return `
-        <button class="conversation-item${activeClass}" type="button" data-conversation-id="${escapeHtml(conversation.conversation_id)}">
+        <div class="history-row"><button class="conversation-item${activeClass}" type="button" data-conversation-id="${escapeHtml(conversation.conversation_id)}">
           <span class="conversation-title">${escapeHtml(conversation.title || "新会话")}</span>
           <span class="conversation-meta">${escapeHtml(formatDate(conversation.updated_at))}</span>
           <span class="conversation-doc">${escapeHtml(
@@ -636,13 +647,44 @@ function renderConversationList() {
               ? `知识库：${getKnowledgeBaseName(conversation.kb_id)}`
               : `文档：${getDocumentName(conversation.document_id)}`
           )}</span>
-        </button>
+        </button><button type="button" class="history-delete" data-delete-conversation="${escapeHtml(conversation.conversation_id)}" aria-label="删除会话：${escapeHtml(conversation.title || "新会话")}" title="删除会话">×</button></div>
       `;
     })
     .join("");
 }
 
+async function deleteConversation(conversationId) {
+  if (deletingConversations.has(conversationId)) return;
+  if (answeringConversationId === conversationId) {
+    setStatus("conversationStatus", "请等待当前回答结束后再删除会话。", "error");
+    return;
+  }
+  if (!window.confirm("删除这段会话及其消息和引用？此操作不可撤销。")) return;
+  const owner = currentUser?.user_id;
+  deletingConversations.add(conversationId);
+  try {
+    const response = await authorizedFetch(`${getApiBase()}/conversations/${encodeURIComponent(conversationId)}`, { method: "DELETE" });
+    if (response.status !== 404) await parseResponse(response);
+    if (currentUser?.user_id !== owner) return;
+    conversations = conversations.filter((item) => item.conversation_id !== conversationId);
+    if (currentConversationId === conversationId) {
+      currentConversationId = "";
+      $("answerConversationId").value = "";
+      $("answerResult").replaceChildren();
+      $("emptyState").classList.remove("hidden");
+      updateContextText();
+    }
+    clearStatus("conversationStatus");
+    renderConversationList();
+  } catch (error) {
+    if (currentUser?.user_id === owner) setStatus("conversationStatus", `删除失败：${error.message}`, "error");
+  } finally {
+    deletingConversations.delete(conversationId);
+  }
+}
+
 async function selectConversation(conversationId) {
+  ResearchUI.showChat();
   const user = requireUser();
   const conversation = conversations.find((item) => item.conversation_id === conversationId);
   $("answerUserType").value =
@@ -684,6 +726,7 @@ async function selectConversation(conversationId) {
     });
     const response = await authorizedFetch(url);
     const messages = await parseResponse(response);
+    if (currentConversationId !== conversationId || currentUser?.user_id !== user.user_id) return;
     renderMessages(messages);
   } catch (error) {
     setStatus("answerStatus", error.message, "error");
@@ -711,6 +754,10 @@ function updateContextText(conversation) {
 }
 
 function updateComposerAvailability() {
+  if (ResearchUI.isActive()) {
+    ResearchUI.syncContext();
+    return;
+  }
   const hasConversation = Boolean(currentConversationId);
   $("answerQuery").disabled = !hasConversation;
   $("answerButton").disabled = !hasConversation;
@@ -747,6 +794,7 @@ function renderMessages(messages) {
 }
 
 async function startBlankConversation() {
+  ResearchUI.showChat();
   currentDocumentId = "";
   currentKnowledgeBaseId = "";
   currentConversationId = "";
@@ -1362,6 +1410,10 @@ function appendMessage(role, content, sources = [], options = {}) {
 }
 
 async function answerQuestion() {
+  if (ResearchUI.isActive()) {
+    await ResearchUI.submit();
+    return;
+  }
   const user = requireUser();
   const conversationId = $("answerConversationId").value.trim();
   const query = $("answerQuery").value.trim();
@@ -1376,6 +1428,7 @@ async function answerQuestion() {
 
   clearStatus("answerStatus");
   button.disabled = true;
+  answeringConversationId = conversationId;
   setStatus("answerStatus", "正在生成回答。", "info");
 
   try {
@@ -1398,17 +1451,19 @@ async function answerQuestion() {
     appendMessage("assistant", data.answer, data.sources || [], {
       taskType: data.task_type,
     });
-    $("answerQuery").value = "";
+    if ($("answerQuery").value.trim() === query) $("answerQuery").value = "";
     clearStatus("answerStatus");
     await loadConversations();
   } catch (error) {
     setStatus("answerStatus", error.message, "error");
   } finally {
-    button.disabled = false;
+    answeringConversationId = null;
+    updateComposerAvailability();
   }
 }
 
 function bindEvents() {
+  ResearchUI.init();
   const toggleMobileMenu = (open) => {
     $("sidebar").classList.toggle("is-open", open);
     $("sidebarBackdrop").classList.toggle("hidden", !open);
@@ -1479,8 +1534,11 @@ function bindEvents() {
     } else {
       selectedKnowledgeBaseDocumentIds.delete(documentId);
     }
+    ResearchUI.syncContext();
   });
   $("conversationList").addEventListener("click", (event) => {
+    const remove = event.target.closest("[data-delete-conversation]");
+    if (remove) { deleteConversation(remove.dataset.deleteConversation); return; }
     const item = event.target.closest("[data-conversation-id]");
     if (!item) return;
     selectConversation(item.dataset.conversationId);
@@ -1519,6 +1577,7 @@ async function initApp() {
     await loadKnowledgeBases();
     await loadDocuments();
     await loadConversations();
+    ResearchUI.loadHistory();
     resumePendingJobs();
   } catch {
     logout();
@@ -1526,6 +1585,7 @@ async function initApp() {
 }
 
 window.addEventListener("beforeunload", () => {
+  ResearchUI.stopPolling();
   for (const job of uploadJobs.values()) clearTimeout(job.timer);
 });
 

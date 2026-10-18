@@ -22,6 +22,7 @@ from stores.document_store import create_document_indexes
 from stores.knowledge_base_store import create_knowledge_base_indexes
 from stores.ingestion_job_store import create_ingestion_job_indexes
 from services.ingestion_worker_loop import run_worker_loop
+from harness.research_mongo_store import MongoResearchTaskStore
 
 from config import APP_VERSION, BUILD_COMMIT, FRONTEND_DIR
 
@@ -31,6 +32,7 @@ from routers.pdf_router import router as pdf_router
 from routers.knowledge_base_router import router as knowledge_base_router
 from routers.auth_router import router as auth_router
 from routers.ingestion_job_router import router as ingestion_job_router
+from routers.research_task_router import router as research_task_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,6 +47,7 @@ async def lifespan(app: FastAPI):
         await create_document_indexes()
         await create_knowledge_base_indexes()
         await create_ingestion_job_indexes()
+        await app.state.research_task_store.create_indexes()
         worker_task = asyncio.create_task(run_worker_loop(stop_worker))
         yield
     finally:
@@ -61,6 +64,7 @@ app = FastAPI(
     version=APP_VERSION,
     lifespan=lifespan,
 )
+app.state.research_task_store = MongoResearchTaskStore()
 
 app.add_exception_handler(
     APIError,
@@ -87,6 +91,7 @@ app.include_router(user_router)
 app.include_router(knowledge_base_router)
 app.include_router(auth_router)
 app.include_router(ingestion_job_router)
+app.include_router(research_task_router)
 
 @app.get("/health")
 def health_check() -> dict:

@@ -16,6 +16,7 @@ from services.message_service import list_messages
 from services.conversation_service import create_conversation,list_conversations
 from services.chat_service import ask_conversation
 from dependencies.auth import get_current_user_id, require_matching_user
+from stores.conversation_store import delete_conversation_for_user
 router = APIRouter(
     prefix="/conversations",
     tags=["conversations"],
@@ -34,6 +35,16 @@ class AskConversationRequest(BaseModel):
     history_limit: int = Field(default=6, ge=1, le=20)
     n_results: int = Field(default=3, ge=1, le=10)
     user_type: str | None = None
+
+
+@router.delete("/{conversation_id}")
+async def delete_conversation_endpoint(
+    conversation_id: str,
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict:
+    if not await delete_conversation_for_user(conversation_id, authenticated_user_id):
+        raise APIError(404, "CONVERSATION_NOT_FOUND", "Conversation not found")
+    return {"deleted": True}
 
 @router.post("", status_code=201)
 async def create_conversation_endpoint(

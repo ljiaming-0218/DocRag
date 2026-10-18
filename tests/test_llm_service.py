@@ -106,6 +106,44 @@ def test_generate_answer_uses_answer_model(monkeypatch):
     assert create.call_args.kwargs["model"] == "answer-model"
 
 
+def test_generate_answer_can_bound_one_request_without_changing_shared_client(monkeypatch):
+    configure_roles(monkeypatch)
+    client, create = make_client_response("action")
+    client.with_options = Mock(return_value=client)
+    monkeypatch.setattr(service, "create_llm_client", Mock(return_value=client))
+
+    assert service.generate_answer(
+        "prompt", operation="research_action",
+        timeout_seconds=45, max_retries=0,
+    ) == "action"
+
+    client.with_options.assert_called_once_with(timeout=45, max_retries=0)
+    assert create.call_count == 1
+
+
+def test_generate_tool_calls_requires_one_non_parallel_call(monkeypatch):
+    configure_roles(monkeypatch)
+    call = SimpleNamespace(
+        type="function",
+        function=SimpleNamespace(name="search_documents", arguments='{"query":"RAG"}'),
+    )
+    client, create = make_client_response(None)
+    create.return_value.choices[0].message.tool_calls = [call]
+    client.with_options = Mock(return_value=client)
+    monkeypatch.setattr(service, "create_llm_client", Mock(return_value=client))
+    tools = [{"type": "function", "function": {"name": "search_documents"}}]
+
+    result = service.generate_tool_calls(
+        "prompt", tools, operation="research_action", timeout_seconds=45,
+    )
+
+    assert result == [{"type": "function", "name": "search_documents", "arguments": '{"query":"RAG"}'}]
+    assert create.call_args.kwargs["tools"] == tools
+    assert create.call_args.kwargs["tool_choice"] == "required"
+    assert create.call_args.kwargs["parallel_tool_calls"] is False
+    client.with_options.assert_called_once_with(timeout=45, max_retries=0)
+
+
 def test_generate_answer_records_provider_token_usage(monkeypatch):
     configure_roles(monkeypatch)
     usage = SimpleNamespace(

@@ -4,6 +4,22 @@ from stores.database import get_database
 from datetime import datetime
 
 
+async def delete_conversation_for_user(conversation_id: str, user_id: str) -> bool:
+    database = get_database()
+    async with database.client.start_session() as session:
+        async with await session.start_transaction():
+            result = await database["conversations"].delete_one(
+                {"_id": conversation_id, "user_id": user_id}, session=session,
+            )
+            if not result.deleted_count:
+                return False
+            # Sources are embedded in messages and are deleted with them.
+            await database["messages"].delete_many(
+                {"conversation_id": conversation_id}, session=session,
+            )
+    return True
+
+
 async def insert_conversation(conversation: dict) -> None:
     database = get_database()
     conversation_collection = database["conversations"]

@@ -177,17 +177,32 @@ def create_llm_client(role: str) -> OpenAI:
         return client
 
 
-def generate_answer(prompt: str, operation: str = "answer") -> str:
+def _request_completion(
+    prompt: str,
+    operation: str,
+    *,
+    timeout_seconds: float | None = None,
+    max_retries: int | None = None,
+    **request_options,
+):
     started_at = perf_counter()
     role = resolve_llm_role(operation)
     config = get_llm_config(role)
 
     try:
         client = create_llm_client(role)
+        if timeout_seconds is not None or max_retries is not None:
+            options = {}
+            if timeout_seconds is not None:
+                options["timeout"] = timeout_seconds
+            if max_retries is not None:
+                options["max_retries"] = max_retries
+            client = client.with_options(**options)
         response = client.chat.completions.create(
             model=config.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
+            **request_options,
         )
     except LLMServiceError as exc:
         log_llm_failure(exc.code, operation, role, config, started_at, exc)
@@ -224,22 +239,59 @@ def generate_answer(prompt: str, operation: str = "answer") -> str:
 
     record_llm_usage(response, operation, role)
 
+    elapsed = perf_counter() - started_at
+    logger.info(
+        "llm_call_succeeded operation=%s role=%s provider=%s model=%s "
+        "elapsed_seconds=%.2f",
+        operation, role, config.provider, config.model, elapsed,
+    )
+    return response
+
+
+def generate_answer(
+    prompt: str,
+    operation: str = "answer",
+    *,
+    timeout_seconds: float | None = None,
+    max_retries: int | None = None,
+) -> str:
+    started_at = perf_counter()
+    response = _request_completion(
+        prompt, operation,
+        timeout_seconds=timeout_seconds, max_retries=max_retries,
+    )
+
     content = response.choices[0].message.content
     if not content or not content.strip():
         error = LLMServiceError(
             "LLM_EMPTY_CONTENT", "大模型返回了空回答", 502
         )
+        role = resolve_llm_role(operation)
+        config = get_llm_config(role)
         log_llm_failure(error.code, operation, role, config, started_at, error)
         raise error
-
-    elapsed = perf_counter() - started_at
-    logger.info(
-        "llm_call_succeeded operation=%s role=%s provider=%s model=%s "
-        "elapsed_seconds=%.2f",
-        operation,
-        role,
-        config.provider,
-        config.model,
-        elapsed,
-    )
     return content.strip()
+
+
+def generate_tool_calls(
+    prompt: str,
+    tools: list[dict],
+    *,
+    operation: str,
+    timeout_seconds: float,
+    max_retries: int = 0,
+) -> list[dict]:
+    response = _request_completion(
+        prompt, operation,
+        timeout_seconds=timeout_seconds, max_retries=max_retries,
+        tools=tools, tool_choice="required", parallel_tool_calls=False,
+    )
+    calls = response.choices[0].message.tool_calls or []
+    return [
+        {
+            "type": call.type,
+            "name": call.function.name if call.type == "function" else None,
+            "arguments": call.function.arguments if call.type == "function" else None,
+        }
+        for call in calls
+    ]

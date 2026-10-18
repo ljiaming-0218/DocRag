@@ -59,4 +59,4 @@ COPY --chown=user:user medrag ./medrag
 
 EXPOSE 7860
 
-CMD ["python", "-m", "uvicorn", "main:app", "--app-dir", "medrag/backend", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["python", "medrag/backend/start_services.py", "--host", "0.0.0.0", "--port", "7860"]
